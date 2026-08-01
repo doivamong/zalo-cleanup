@@ -11,7 +11,7 @@
 [![Version](https://img.shields.io/badge/version-5.0-CC2929?style=for-the-badge)](https://github.com/doivamong/zalo-cleanup)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1-5391FE?style=for-the-badge&logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#-cài-đặt-60-giây)
-[![Tests](https://img.shields.io/badge/tests-149%20passing-2EA043?style=for-the-badge)](#-phát-triển--đóng-góp)
+[![Tests](https://img.shields.io/badge/tests-158%20passing-2EA043?style=for-the-badge)](#-phát-triển--đóng-góp)
 [![License](https://img.shields.io/badge/license-MIT-000000?style=for-the-badge)](LICENSE)
 
 <kbd>[📌 Vì sao](#-vì-sao-có-công-cụ-này)</kbd> ·
@@ -55,7 +55,7 @@
 | **Hard-coded protected zones** | Covers the Zalo message database, Windows system directories, and installed toolchains — checked in both directions (a path *containing* a protected zone is refused too) and never traversing junctions or symlinks. |
 | **Manual only, by design** | No scheduled task, no background service, no delete-on-reboot. Every action completes before you close the window. |
 
-Requires Windows 10/11 and the built-in PowerShell 5.1. No installation, no dependencies. Ships with a **149-case regression suite** that builds its own sandbox in `%TEMP%`.
+Requires Windows 10/11 and the built-in PowerShell 5.1. No installation, no dependencies. Ships with a **158-case regression suite** that builds its own sandbox in `%TEMP%`.
 
 Not affiliated with VNG Corporation. MIT licensed.
 
@@ -494,12 +494,22 @@ Ngoài ra có `khoiphuc_*.log`, `saoluu_loi_*.txt`, và `quet_*.csv`. Phím `L` 
 
 | Quy mô mã nguồn | |
 |:---|---:|
-| `ZaloCleanup.ps1` | 2.714 dòng · 79 hàm |
-| `ZaloCleanup.Tests.ps1` | 749 dòng · **149 phép thử** |
+| `ZaloCleanup.ps1` | 2.849 dòng · 80 hàm |
+| `ZaloCleanup.Tests.ps1` | 864 dòng · **158 phép thử** |
 | Mục trong `catalog.json` | 33 (20 đã kiểm chứng tận nơi) |
 | Luật vùng bảo vệ | 15 mức `tất cả` + 8 mức `gốc` |
 | Phụ thuộc ngoài | **0** |
 | Tiến trình nền được tạo | **0** |
+
+| Tốc độ — đo trên máy thật | Trước | Sau |
+|:---|---:|---:|
+| Quét theo bộ lọc, 52.712 tệp | 105,0 s | **6,1 s** |
+| Khử trùng lặp, hồ sơ dữ liệu thật | 7,1 s | **1,0 s** |
+| Chu kỳ sao lưu + xóa, 4.000 tệp | 11,1 s | **8,2 s** |
+
+<sub>i5-12400 · SSD SATA · Windows 11 · PowerShell 5.1 · 56.914 tệp / 32,2 GB dữ liệu Zalo thật.
+Nút cổ chai còn lại của bước băm là ổ đĩa chứ không phải CPU: đo được 41 MB/s một luồng và
+53 MB/s tám luồng, trong khi SHA-256 chạy tới 840 MB/s khi dữ liệu đã nằm trong bộ nhớ.</sub>
 
 ---
 
@@ -648,7 +658,11 @@ Các mục còn lại vẫn nạp bình thường. Mục nào không tồn tại
 powershell -NoProfile -ExecutionPolicy Bypass -File ".\ZaloCleanup.Tests.ps1" -Full
 ```
 
-Bộ test tự dựng sandbox trong `%TEMP%`, **không bao giờ đụng vào dữ liệu Zalo thật**, và tự dọn sau khi chạy. Nó kiểm chứng những thứ mà một công cụ xóa tệp buộc phải đúng: bộ lọc không tự mở rộng khi nhập sai · sao lưu lỗi chặn được xóa · thiếu chỗ chặn được sao lưu · đếm đúng khi tệp biến mất giữa chừng · khử trùng lặp chỉ xóa bản đã xác minh hash · vùng bảo vệ không bị chạm tới ở cả hai chiều · quét không đi xuyên junction · dọn thư mục rỗng không xóa junction cũng không đụng đích của nó · thư mục hết rỗng vào phút chót thì không bị xóa · mục sai trong `catalog.json` được nêu tên.
+Bộ test tự dựng sandbox trong `%TEMP%`, **không bao giờ đụng vào dữ liệu Zalo thật**, và tự dọn sau khi chạy. Nó kiểm chứng những thứ mà một công cụ xóa tệp buộc phải đúng: bộ lọc không tự mở rộng khi nhập sai · sao lưu lỗi chặn được xóa · thiếu chỗ chặn được sao lưu · đếm đúng khi tệp biến mất giữa chừng · khử trùng lặp chỉ xóa bản đã xác minh hash · vùng bảo vệ không bị chạm tới ở cả hai chiều · quét không đi xuyên junction · dọn thư mục rỗng không xóa junction cũng không đụng đích của nó · thư mục hết rỗng vào phút chót thì không bị xóa · mục sai trong `catalog.json` được nêu tên · **cả hai mức xác minh sau khi sao lưu đều chạy được**.
+
+Riêng vùng bảo vệ còn được đối chiếu với một **bản đặc tả viết ngây thơ** giữ ngay trong tệp test, trên 598 đầu vào dựng máy móc quanh từng luật — kể cả những tên gần giống phải *không* bị chặn, và ba giá trị `DataRoot` khác nhau để chắc chỉ mục tra cứu dựng lại đúng lúc đổi tài khoản. Sửa lệch khỏi bản đặc tả thì test báo ngay.
+
+> **Bài học từ một lỗi sống sót lâu:** mức xác minh `SHA256 toàn bộ` từng hỏng hoàn toàn — `@()` áp lên `List[object]` trong PowerShell 5.1 ném lỗi — mà không phép thử nào bắt được, đơn giản vì chưa phép thử nào từng chọn mức đó. Người dùng chọn mức chắc chắn nhất lại là người duy nhất gặp lỗi. Một nhánh không có test là một nhánh chưa từng chạy.
 
 > **Chạy bộ test này sau mỗi lần sửa mã nguồn.**
 
@@ -701,7 +715,7 @@ Phần mềm được cung cấp "nguyên trạng", không kèm bảo đảm nà
 
 **Dọn dẹp Zalo** `v5.0`
 
-Built with 💙 PowerShell · 🪟 Windows · 🔐 SHA-256 · 🧪 149 tests
+Built with 💙 PowerShell · 🪟 Windows · 🔐 SHA-256 · 🧪 158 tests
 
 <sub>Thủ công hoàn toàn · Không phụ thuộc · Không chạy nền · MIT</sub>
 

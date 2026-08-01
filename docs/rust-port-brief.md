@@ -3,6 +3,8 @@
 > Dán toàn bộ tệp này vào một phiên mới, kèm câu: **"Đọc brief này rồi lập kế hoạch. Chưa viết code."**
 >
 > Đây là ảnh chụp thực trạng đo được ngày **01/08/2026**, không phải trí nhớ. Mọi con số trong đây đều đo trên máy thật.
+>
+> **Tài liệu này là ẢNH CHỤP tại thời điểm lập, cố ý không viết lại.** Các con số trong đây đã cũ dần kể từ đó — ví dụ bộ test lúc chụp là 163 phép thử, nay là 204. Số liệu sống nằm ở [`viec-con-lai.md`](viec-con-lai.md) và [`ke-hoach-port.md`](ke-hoach-port.md); phần **bài học đã trả giá** ở mục 7 thì không cũ.
 
 ---
 

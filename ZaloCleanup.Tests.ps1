@@ -1152,5 +1152,41 @@ Get-ChildItem $logDir -File -ErrorAction SilentlyContinue |
     Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-30) } |
     Remove-Item -Force -ErrorAction SilentlyContinue
 
+# ---------------------------------------------------------------- chốt chống trôi số
+# README ghi số phép thử ở BỐN chỗ. Suốt quá trình phát triển, mỗi lần thêm phép
+# thử là một lần phải nhớ sửa cả bốn — và đã có nhiều lần quên, để lại con số cũ
+# nằm trong tài liệu chính suốt nhiều commit.
+#
+# Đây là lỗi quy trình chứ không phải lỗi bất cẩn, nên sửa bằng máy chứ đừng sửa
+# bằng cách cố nhớ. Chốt này chạy ở CUỐI, sau khi đã biết tổng số phép thử thật,
+# và cố ý KHÔNG phải một Assert — làm Assert thì chính nó lại cộng vào tổng đang
+# đếm, thành đếm vòng quanh.
+#
+# Chỉ kiểm ở lượt chạy -Full, vì lượt rút gọn có ít phép thử hơn nên lệch là đúng.
+if ($Full) {
+    $readme = Join-Path $PSScriptRoot 'README.md'
+    if (Test-Path -LiteralPath $readme) {
+        $tong = $script:Pass + $script:Fail
+        $noiDung = Get-Content -LiteralPath $readme -Raw -Encoding UTF8
+        $mau = @(
+            "tests-$tong%20passing"
+            "**$tong-case regression suite**"
+            "**$tong phép thử**"
+            "🧪 $tong tests"
+        )
+        $thieu = @($mau | Where-Object { -not $noiDung.Contains($_) })
+        if ($thieu.Count -gt 0) {
+            Write-Host ''
+            Write-Host ("  README ghi sai số phép thử. Thật sự có {0}." -f $tong) -ForegroundColor Red
+            Write-Host  '  Không thấy các chuỗi sau trong README.md:' -ForegroundColor Red
+            $thieu | ForEach-Object { Write-Host ('    ' + $_) -ForegroundColor Red }
+            Write-Host  '  Sửa README rồi chạy lại. Con số trong tài liệu chính phải đúng.' -ForegroundColor Red
+            Write-Host ''
+            exit 1
+        }
+        Write-Host ("  README khớp: {0} phép thử ở cả {1} chỗ." -f $tong, $mau.Count) -ForegroundColor DarkGray
+    }
+}
+
 if ($script:Fail -gt 0) { exit 1 }
 exit 0

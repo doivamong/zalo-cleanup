@@ -1,6 +1,6 @@
 # Việc còn lại — và prompt khởi động phiên triển khai
 
-> Rà soát ngày **01/08/2026** · **192/192 phép thử đạt**
+> Rà soát ngày **01/08/2026** · **204/204 phép thử đạt**
 >
 > Nguồn: [`rust-port-brief.md`](rust-port-brief.md) · [`ui-ux-council.md`](ui-ux-council.md) · [`quyet-dinh.md`](quyet-dinh.md)
 > Mọi việc dưới đây đều đã truy về tận mã nguồn, không lấy từ trí nhớ.
@@ -9,7 +9,7 @@
 
 ## Tình hình một dòng
 
-Ba tài liệu thiết kế đã xong. **10/12 quyết định đã chốt.** Hai câu còn treo là chi tiền và phạm vi, không chặn thiết kế.
+Ba tài liệu thiết kế đã xong. **10/12 quyết định đã chốt.** Bản Rust đã qua **mốc M0 và M1**. Hai câu còn treo là chi tiền và phạm vi, không chặn thiết kế.
 
 Rà soát lần này phát hiện **một lỗ hổng an toàn đang sống trong bản PowerShell** — đã sửa xong, xem P0 ngay dưới.
 
@@ -92,7 +92,7 @@ Chín câu ở mục 9 của [`rust-port-brief.md`](rust-port-brief.md) đã đ�
 2. Chọn crate, và cân với lời hứa "0 phụ thuộc"
 3. Khung giao diện — **đã chốt egui** (QĐ-01), kế hoạch chỉ cần xác nhận
 4. Thứ tự làm, kèm chốt kiểm chứng từng bước
-5. 192 phép thử port kiểu gì — chúng đang lái công cụ bằng chuỗi phím qua stdin, cách đó không dùng lại được với giao diện đồ họa
+5. 204 phép thử port kiểu gì — chúng đang lái công cụ bằng chuỗi phím qua stdin, cách đó không dùng lại được với giao diện đồ họa
 6. Giữ tương thích bản sao lưu cũ, và kiểm chứng ra sao
 7. Ký số · SmartScreen · diệt virus · kiểm chứng nguồn · cập nhật
 8. Bố cục bên trong `rust\` và cách hai bản dùng chung tệp — **đã chốt cách chia** (Q11), kế hoạch chỉ cần chi tiết hóa
@@ -125,7 +125,7 @@ Chín câu ở mục 9 của [`rust-port-brief.md`](rust-port-brief.md) đã đ�
 - **So bằng SHA-256**, không so bằng số lượng
 - **Kiểm bằng đột biến** — cố tình phá một lớp an toàn rồi xem test có đỏ không
 - **Không chạy thử trên dữ liệu Zalo thật ở chế độ có xóa.** Chỉ quét
-- **192 phép thử hiện có là hợp đồng.** Port hết, không bỏ cái nào
+- **204 phép thử hiện có là hợp đồng.** Port hết, không bỏ cái nào
 
 ---
 
@@ -152,23 +152,24 @@ D:\zalo-tool\rust\. Hai bản chạy song song, bản PowerShell KHÔNG bị b�
 
 LÀM THEO ĐÚNG THỨ TỰ NÀY:
 
-Bước 1 — mốc M0 trong docs/ke-hoach-port.md.
-  Dựng workspace rust\ và CI. Cổng M0: cargo tree -p zalo-core KHÔNG được chứa
-  eframe, egui, winit. Dựng CI chạy ZaloCleanup.Tests.ps1 cho CẢ hai bản ngay
-  từ mốc này, đừng để sau — hai bản không cùng chạy một bộ test là hai bản đang
-  lặng lẽ trở thành hai công cụ khác nhau.
+M0 và M1 ĐÃ XONG — đừng làm lại. Xem bảng trạng thái mốc ở đầu mục Q4 của
+docs/ke-hoach-port.md để biết chính xác đã tới đâu và bằng chứng nào.
 
-Bước 2 — M1 lõi an toàn, rồi M2 duyệt cây và băm.
-  Sau M2 là mốc kiểm điểm BẮT BUỘC: lúc đó đã biết lõi có port đúng không và có
-  nhanh hơn thật không, mà chưa tiêu công vào giao diện. Đây là chỗ rẻ nhất để
-  đổi ý.
+Bước 1 — mốc M2: duyệt cây và băm.
+  Cổng M2 có ba vế: hai bản ra cùng tập tệp và cùng số lỗi trên một cây thật;
+  dựng junction THẬT rồi kiểm cả hai đều không đi xuyên; và quét 52.748 tệp
+  trong không quá 1,5 giây. Vế junction là vế dễ trượt nhất — walkdir không theo
+  symlink nhưng junction NTFS không phải symlink, phải đo chứ đừng tin mặc định.
+
+Bước 2 — DỪNG LẠI. Sau M2 là mốc kiểm điểm BẮT BUỘC.
+  Lúc đó đã biết lõi có port đúng không và có nhanh hơn thật không, mà chưa tiêu
+  công vào giao diện. Đây là chỗ rẻ nhất để đổi ý. Báo cáo rồi mới đi tiếp.
 
 Bước 3 — M3 tới M6 theo đúng cổng đã ghi trong kế hoạch.
-  M3 là mốc quyết định: 69 phép thử E2E hiện có phải chạy được trên bản Rust mà
-  KHÔNG SỬA một ký tự nào.
+  M3 là mốc quyết định: 69 phép thử đầu-cuối hiện có phải chạy được trên bản
+  Rust mà KHÔNG SỬA một ký tự nào.
 
 Chạm bất kỳ tiêu chí dừng D-1 tới D-4 nào thì DỪNG và báo cáo, đừng tự đi tiếp.
-
 QUY TẮC BẤT DI DỊCH KHI LÀM:
 
 - Chạy bộ test sau MỖI lần sửa: powershell -NoProfile -ExecutionPolicy Bypass

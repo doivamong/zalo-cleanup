@@ -1,7 +1,7 @@
 # Kế hoạch port sang Rust
 
 > Trả lời chín câu ở [`rust-port-brief.md`](rust-port-brief.md) §9 và [`viec-con-lai.md`](viec-con-lai.md) P3-A.
-> Lập ngày **01/08/2026** · mã nguồn tại `ac172e0` · **192/192 phép thử đạt**
+> Lập ngày **01/08/2026** · **204/204 phép thử đạt**
 > Mọi con số trong tài liệu này đều đo trên máy thật, không ước lượng.
 
 ---
@@ -121,17 +121,40 @@ Hai việc kèm theo, đã chốt ở `quyet-dinh.md`: **nạp phông hệ thố
 
 Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không đi tiếp.
 
-## M0 · Khung sườn
+## Trạng thái các mốc
+
+| Mốc | Trạng thái | Bằng chứng |
+|:---|:---|:---|
+| **M0** Khung sườn + CI | ✅ **đạt** | `7db50ad` · CI xanh cả hai job · cổng kiến trúc đã đột biến hai nhánh, cả hai đỏ đúng |
+| **M1** Lõi an toàn | ✅ **đạt** | `361e250` · đối chiếu **57.572 đầu vào, 0 khác biệt** · 3 đột biến, cả ba đỏ |
+| **M2** Duyệt cây và băm | ⬜ chưa | **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
+| **M3** Chế độ headless | ⬜ chưa | |
+| **M4** Động tới dữ liệu | ⬜ chưa | |
+| **M5** Giao diện | ⬜ chưa | |
+| **M6** Phát hành | ⬜ chưa | Chặn bởi `P2-1`, ngân sách ký số |
+
+## M0 · Khung sườn — ✅ đạt
 
 Dựng workspace, ba crate rỗng, `rust-toolchain.toml` ghim phiên bản.
 
 > **Cổng M0:** `cargo test -p zalo-core` chạy được, **và** `cargo tree -p zalo-core` không chứa `eframe`, `egui`, `winit`. Đây là cổng kiến trúc, chạy trong CI mãi mãi về sau — nó biến "lõi không phụ thuộc giao diện" từ lời hứa thành thứ máy kiểm.
 
-## M1 · Lõi an toàn — 186 dòng, phần nhỏ nhất và nguy hiểm nhất
+## M1 · Lõi an toàn — ✅ đạt
 
-`protect/` `confirm/` `gate/`.
+`protect/` `confirm/` `gate/` — 186 dòng, phần nhỏ nhất và nguy hiểm nhất.
 
-> **Cổng M1:** ① port đủ **121 phép thử đơn vị** ② chạy lại **đúng bộ so sánh 57.144 đầu vào** mà phiên trước đã dùng cho `Test-Protected`, lần này so PowerShell với Rust → **0 khác biệt** ③ mọi đột biến đã dùng trong phiên trước đều làm bộ test Rust đỏ.
+> **Cổng M1:** ① port **toàn bộ phép thử đơn vị thuộc lõi an toàn** ② chạy lại bộ so sánh **≥ 57.144 đầu vào** mà phiên trước đã dùng cho `Test-Protected`, lần này so PowerShell với Rust → **0 khác biệt** ③ mọi đột biến đã dùng trong phiên trước đều làm bộ test Rust đỏ.
+
+**Sửa một chỗ viết sai của chính kế hoạch này.** Bản đầu ghi cổng ① là "port đủ **121 phép thử đơn vị**". Sai phạm vi: 121 là số phép thử đơn vị của **toàn bộ công cụ**, mà phần lớn trong đó kiểm những hàm thuộc M2 và M4 — chưa tồn tại ở M1. Đòi chúng ở đây là đòi một thứ không thể đạt, và tuyên bố "cổng đạt" dựa trên một spec sai thì vô nghĩa.
+
+Con số đúng cho riêng lõi an toàn, đếm trên mã nguồn:
+
+| | |
+|:---|---:|
+| Chỗ gọi `Assert` phía PowerShell chạm thẳng bảy hàm của lõi an toàn | **45** |
+| Hàm `#[test]` phía Rust phủ cùng bề mặt đó | **22** |
+
+Hai con số không bằng nhau và **không cần bằng nhau**: phép thử Rust viết theo bảng, một hàm `#[test]` phủ cả bảng mười ca. Thứ chứng minh tương đương không phải số lượng phép thử mà là **bộ đối chiếu song song** ở cổng ②.
 
 Chọn mốc này làm mốc đầu vì nó nhỏ, rủi ro cao nhất, và **đã có sẵn bộ so sánh chứng minh được cách làm này hiệu quả**.
 
@@ -149,7 +172,7 @@ Cổng ③ là chỗ kiểm chứng lợi ích hiệu năng. Không đạt thì 
 
 > **Cổng M3:** chạy được **69 phép thử E2E hiện có, KHÔNG SỬA MỘT KÝ TỰ**, chỉ đổi đường dẫn công cụ, và cho cùng kết quả.
 
-Đạt cổng này thì toàn bộ 192 phép thử thành **hợp đồng sống cho cả hai bản**, và bộ so sánh song song có sẵn công cụ. Không đạt thì chiến lược kiểm chứng sụp và phải thiết kế lại trước khi viết thêm dòng nào.
+Đạt cổng này thì toàn bộ bộ test thành **hợp đồng sống cho cả hai bản**, và bộ so sánh song song có sẵn công cụ. Không đạt thì chiến lược kiểm chứng sụp và phải thiết kế lại trước khi viết thêm dòng nào.
 
 ## M4 · Động tới dữ liệu
 
@@ -169,7 +192,7 @@ Theo `ui-ux-council.md`.
 
 ---
 
-# Q5 · Port 192 phép thử
+# Q5 · Port 204 phép thử
 
 Đây là chỗ kế hoạch khác hẳn dự đoán ban đầu, nhờ một con số đo được.
 
@@ -234,7 +257,7 @@ Cấu trúc thư mục cũng là hợp đồng: `<đích>\<yyyyMMdd_HHmmss>\<đ�
 ```
 D:\zalo-tool\
   ZaloCleanup.ps1              bản PowerShell — ở lại, không bỏ
-  ZaloCleanup.Tests.ps1        192 phép thử — hợp đồng cho CẢ HAI bản
+  ZaloCleanup.Tests.ps1        204 phép thử — hợp đồng cho CẢ HAI bản
   catalog.json                 DÙNG CHUNG
   settings.json                riêng bản PowerShell
   profiles.json                riêng bản PowerShell

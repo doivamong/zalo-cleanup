@@ -666,6 +666,14 @@ Riêng vùng bảo vệ còn được đối chiếu với một **bản đặc 
 
 > **Chạy bộ test này sau mỗi lần sửa mã nguồn.**
 
+### 🦀 Thư mục `rust/` là gì
+
+Repo có một thư mục [`rust/`](rust/) chứa bản viết lại bằng Rust, **đang làm dở và chưa dùng được**. Công cụ thật vẫn là `ZaloCleanup.ps1` ở thư mục gốc — bản Rust không thay thế nó, hai bản sẽ chạy song song.
+
+Lý do viết lại **không phải tốc độ** mà là hai thứ PowerShell 5.1 không làm được: giao diện đồ họa, và một tệp `.exe` tải về chạy ngay không cần cài gì.
+
+Đã qua mốc M0 và M1. Lõi an toàn đã port xong và được **đối chiếu song song với bản PowerShell trên 57.572 đầu vào, cho 0 khác biệt**. Chi tiết ở [`rust/README.md`](rust/README.md); kế hoạch bảy mốc và tiêu chí dừng ở [`docs/ke-hoach-port.md`](docs/ke-hoach-port.md).
+
 <details>
 <summary><b>📏 Quy ước khi sửa mã</b></summary>
 

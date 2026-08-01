@@ -1,0 +1,10 @@
+[package]
+name = "zalo-cli"
+description = "Vỏ dòng lệnh, nói đúng giao thức phím của bản PowerShell."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+zalo-core = { path = "../zalo-core" }

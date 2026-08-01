@@ -1,0 +1,17 @@
+[package]
+name = "zalo-core"
+description = "Lõi của công cụ Dọn dẹp Zalo: quyết định xóa gì, và chặn cái gì."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# KHÔNG BAO GIỜ thêm phụ thuộc giao diện vào đây.
+#
+# Cổng M0 kiểm điều này bằng máy sau mỗi commit: `rust\tools\check-deps.ps1`
+# chạy `cargo tree -p zalo-core` và bắt lỗi nếu thấy eframe, egui, winit hay
+# accesskit. Đo được: lõi 36 crate, cộng giao diện thành 112 — nghĩa là 76 crate
+# chỉ để vẽ cửa sổ, và chúng không được dính vào phần quyết định xóa gì.
+[dependencies]
+
+[dev-dependencies]

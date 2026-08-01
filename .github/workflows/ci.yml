@@ -1,0 +1,97 @@
+# CI cho Dọn dẹp Zalo.
+#
+# Vì sao dựng ngay ở mốc M0 chứ không để sau:
+#
+# Từ đây trở đi repo có HAI bản của cùng một công cụ, chạy song song trên cùng
+# một tập tệp. Mỗi lần sửa bản này là một lần có thể làm bản kia lệch. Không có
+# CI chạy cả hai sau mỗi commit thì hai bản sẽ trôi xa nhau TRONG IM LẶNG — và
+# ngày phát hiện ra là ngày một trong hai xóa nhầm dữ liệu của ai đó.
+#
+# Xem docs/ke-hoach-port.md §"Rủi ro lớn nhất của chính kế hoạch này".
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------ bản PowerShell
+  # 192 phép thử là HỢP ĐỒNG cho cả hai bản. Từ mốc M3, job này chạy thêm một
+  # lượt nữa trỏ vào zalo-cli.exe với cùng tệp test, không sửa một ký tự.
+  powershell:
+    name: 192 phép thử · bản PowerShell
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kiểm tệp .ps1 lưu UTF-8 CÓ BOM
+        shell: pwsh
+        run: |
+          # Thiếu BOM thì PowerShell 5.1 đọc theo bảng mã ANSI và mọi chữ có dấu
+          # vỡ hết — kể cả cụm XÓA mà người dùng phải gõ để xác nhận.
+          $loi = @()
+          foreach ($f in Get-ChildItem -Path . -Filter *.ps1 -Recurse -File) {
+            $b = [IO.File]::ReadAllBytes($f.FullName)
+            if ($b.Length -lt 3 -or $b[0] -ne 0xEF -or $b[1] -ne 0xBB -or $b[2] -ne 0xBF) {
+              $loi += $f.FullName
+            }
+          }
+          if ($loi.Count -gt 0) {
+            Write-Host "Thiếu BOM ở:" -ForegroundColor Red
+            $loi | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+            exit 1
+          }
+          Write-Host "Mọi tệp .ps1 đều có BOM." -ForegroundColor Green
+
+      - name: Chạy bộ test đầy đủ
+        shell: powershell
+        run: |
+          # powershell.exe chứ không pwsh: công cụ nhắm PowerShell 5.1 dựng sẵn
+          # của Windows, và đó cũng là thứ người dùng thật sự chạy.
+          .\ZaloCleanup.Tests.ps1 -Full
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  # ------------------------------------------------------------------ bản Rust
+  rust:
+    name: Rust · lõi và cổng kiến trúc
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml ghim phiên bản, rustup tự cài đúng bản đó.
+      # Ghim là điều kiện của build tái lập được — thứ thay thế cho khả năng đọc
+      # mã mà người dùng mất khi ta chuyển sang exe. Xem §Q7 của kế hoạch.
+      - name: Bản Rust đang dùng
+        run: |
+          rustc --version
+          cargo --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Định dạng
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Kiểm thử lõi
+        run: cargo test --workspace
+
+      # CỔNG M0. Đây là lý do CI tồn tại từ mốc này chứ không phải mốc sau.
+      - name: Cổng kiến trúc M0 — lõi không được dính giao diện
+        shell: powershell
+        run: .\tools\check-deps.ps1

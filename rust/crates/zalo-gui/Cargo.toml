@@ -1,0 +1,12 @@
+[package]
+name = "zalo-gui"
+description = "Vỏ đồ họa egui. Không chứa quyết định xóa."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# eframe/egui CHƯA thêm ở M0 — thêm ở M5. Thêm sớm là kéo 76 crate vào mọi lần
+# build CI để đổi lấy con số không.
+[dependencies]
+zalo-core = { path = "../zalo-core" }

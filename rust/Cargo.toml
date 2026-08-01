@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/zalo-core",
+    "crates/zalo-cli",
+    "crates/zalo-gui",
+]
+
+# Ghim ở đây để cả ba crate dùng cùng một bộ phiên bản. Cargo.lock ĐƯỢC COMMIT:
+# đây là ứng dụng phát hành dạng exe dựng sẵn nên phải build lại được đúng bộ
+# phụ thuộc của bản đã phát hành. Xem docs/ke-hoach-port.md §Q7.
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.94"
+license = "MIT"
+
+[workspace.dependencies]
+
+# Bản phát hành: ưu tiên kích thước tệp, vì lời hứa là "tải về chạy ngay".
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

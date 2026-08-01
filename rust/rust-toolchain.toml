@@ -1,0 +1,12 @@
+# Ghim phiên bản toolchain để build TÁI LẬP ĐƯỢC.
+#
+# Vì sao quan trọng hơn bình thường: chuyển sang exe dựng sẵn là người dùng mất
+# khả năng đọc mã trước khi chạy một công cụ chuyên xóa dữ liệu. Thứ thay thế
+# cho khả năng đó là: build lại được từ CI công khai và ra đúng cùng một tệp,
+# rồi đối chiếu mã băm. Toolchain trôi phiên bản là mất luôn cách kiểm chứng ấy.
+#
+# Xem docs/ke-hoach-port.md §Q7.
+[toolchain]
+channel = "1.94.1"
+targets = ["x86_64-pc-windows-msvc"]
+components = ["rustfmt", "clippy"]

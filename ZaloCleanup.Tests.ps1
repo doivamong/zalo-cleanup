@@ -490,11 +490,20 @@ New-Item -ItemType Directory -Force $canonDir | Out-Null
 $canonShort = (& cmd /c "for %I in (`"$canonDir`") do @echo %~sI").Trim()
 Assert 'Dựng được dạng ngắn 8.3 để thử Get-CanonPath' `
     ($canonShort -ne '' -and (Test-Path -LiteralPath $canonShort)) ("Nhận được: " + $canonShort)
-Assert 'Get-CanonPath mở tên 8.3 thành tên dài' `
-    ((Get-CanonPath $canonShort) -eq $canonDir.TrimEnd('\')) `
-    ("Nhận được: " + (Get-CanonPath $canonShort) + " · mong đợi: " + $canonDir)
+# So với chính Get-CanonPath của dạng dài, KHÔNG so với biến $canonDir.
+# Trên máy chủ CI thì %TEMP% đã ở dạng ngắn sẵn nên $canonDir cũng ngắn theo, và
+# so với nó là so với một chuỗi chưa chuẩn hóa — phép thử đỏ trong khi hàm đúng.
+# Chính CI đã bắt được lỗi này của phép thử. Tính chất cần khẳng định là HAI DẠNG
+# CÙNG QUY VỀ MỘT, không phải bằng một chuỗi cụ thể nào.
+Assert 'Get-CanonPath đưa dạng ngắn và dạng dài về cùng một kết quả' `
+    ((Get-CanonPath $canonShort) -eq (Get-CanonPath $canonDir)) `
+    ("ngắn -> " + (Get-CanonPath $canonShort) + " · dài -> " + (Get-CanonPath $canonDir))
+Assert 'Get-CanonPath mở hết tên 8.3, không còn dấu ngã' `
+    ((Get-CanonPath $canonShort) -notmatch '~\d') `
+    ("Nhận được: " + (Get-CanonPath $canonShort))
 Assert 'Get-CanonPath bỏ gạch chéo thừa' `
-    ((Get-CanonPath ($canonDir + '\')) -eq $canonDir.TrimEnd('\')) 'Sai'
+    ((Get-CanonPath ($canonDir + '\')) -eq (Get-CanonPath $canonDir)) `
+    ("có gạch chéo -> " + (Get-CanonPath ($canonDir + '\')))
 Assert 'Get-CanonPath giữ nguyên gốc ổ đĩa' ((Get-CanonPath 'C:\') -eq 'C:\') `
     ("Nhận được: " + (Get-CanonPath 'C:\'))
 Assert 'Get-CanonPath không ném lỗi với chuỗi rỗng' ((Get-CanonPath '') -eq '') `

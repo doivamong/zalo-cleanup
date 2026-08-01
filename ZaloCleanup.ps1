@@ -186,8 +186,31 @@ function Read-YesNo($prompt) {
 # Câu xác nhận chấp nhận cả bản có dấu lẫn không dấu. Người dùng có thể gõ
 # thiếu dấu, và một số môi trường dòng lệnh làm hỏng ký tự có dấu khi truyền
 # qua đường ống.
+# Bỏ dấu thanh khỏi chuỗi, giữ nguyên chữ hoa chữ thường.
+# Chữ Đ và đ KHÔNG phải chữ có dấu thanh mà là chữ cái riêng, nên không bị đụng
+# tới — đúng như mong muốn, vì không cụm xác nhận nào của công cụ chứa nó.
+function Remove-ToneMarks($s) {
+    if ([string]::IsNullOrEmpty($s)) { return $s }
+    $d = $s.Normalize([Text.NormalizationForm]::FormD)
+    $sb = New-Object Text.StringBuilder
+    foreach ($ch in $d.ToCharArray()) {
+        if ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($ch) -ne
+            [Globalization.UnicodeCategory]::NonSpacingMark) { [void]$sb.Append($ch) }
+    }
+    return $sb.ToString().Normalize([Text.NormalizationForm]::FormC)
+}
+
+# Tiếng Việt có hai kiểu đặt dấu đều đúng chính tả cho cùng một chữ: XÓA và XOÁ.
+# Bộ gõ đặt dấu kiểu nào là do người dùng chọn chứ không phải do họ gõ sai. Bản
+# cũ chỉ nhận đúng XÓA, nên người dùng bộ gõ đặt dấu kiểu mới gõ XOÁ thì bị từ
+# chối, và kết luận hợp lý nhất của họ là công cụ hỏng.
+#
+# Cách sửa: bỏ dấu rồi so với dạng không dấu. Nhận mọi kiểu đặt dấu, nhưng VẪN
+# so phân biệt hoa thường, nên chữ thường vẫn bị từ chối — ma sát của bước xác
+# nhận không hề bị nới ra, chỉ hết bắt bẻ chuyện đặt dấu ở đâu.
 function Test-ConfirmPhrase($answer, $withMarks, $plain) {
-    return ($answer -ceq $withMarks -or $answer -ceq $plain)
+    if ($answer -ceq $withMarks -or $answer -ceq $plain) { return $true }
+    return ((Remove-ToneMarks $answer) -ceq $plain)
 }
 
 function Reset-Scan {
@@ -1553,7 +1576,7 @@ function Invoke-Backup {
     New-Item -ItemType Directory -Force -Path $destRun | Out-Null
     Register-BackupRoot $dest
 
-    $ok = 0; $fail = 0; $i = 0
+    $ok = 0; $fail = 0; $i = 0; $diskFull = $false
     $copied = New-Object Collections.Generic.List[object]
     $failLog = New-Object Collections.Generic.List[string]
     # Nhớ thư mục đã tạo để khỏi hỏi đĩa lại cho từng tệp. Sao lưu Zalo thường
@@ -1589,11 +1612,43 @@ function Invoke-Backup {
             $ok++
             $copied.Add([pscustomobject]@{ Src = $f.Path; Dst = $target; Rel = $rel; Size = $f.Size })
         } catch {
+            $msg = $_.Exception.Message
+
+            # Ổ đích hết chỗ thì DỪNG NGAY, đừng thử nốt hàng vạn tệp còn lại:
+            # mỗi tệp sau đó cũng hỏng y hệt, chỉ tổ mất thời gian và làm nhật ký
+            # ngập một loại lỗi duy nhất, che mất những lỗi thật sự khác nhau.
+            # Invoke-Restore đã làm đúng như vậy từ đầu — đây là đưa Invoke-Backup
+            # về ngang hàng.
+            #
+            # IO.File::Copy ném IOException thẳng nên mã lỗi nằm ngay ở Exception,
+            # còn Copy-Item thì bọc thêm một lớp. Xét cả hai cho chắc.
+            # 112 = ERROR_DISK_FULL, 39 = ERROR_HANDLE_DISK_FULL.
+            $hr = 0
+            try { $hr = $_.Exception.HResult -band 0xFFFF } catch { }
+            if ($hr -ne 112 -and $hr -ne 39) {
+                try { $hr = $_.Exception.InnerException.HResult -band 0xFFFF } catch { }
+            }
+            if ($hr -eq 112 -or $hr -eq 39 -or $msg -match 'not enough space|disk is full') {
+                $diskFull = $true
+                $failLog.Add($f.Path + ' => ổ đích hết chỗ, dừng tại đây')
+                break
+            }
+
             $fail++
-            if ($failLog.Count -lt 200) { $failLog.Add($f.Path + ' => ' + $_.Exception.Message) }
+            # Không chặn trần số dòng nhật ký lỗi. Sao lưu hỏng là chặn luôn bước
+            # xóa, nên danh sách tệp hỏng chính là thứ người dùng cần đọc để quyết
+            # định làm gì tiếp — cắt bớt nó là giấu đúng thứ họ cần nhất.
+            $failLog.Add($f.Path + ' => ' + $msg)
         }
     }
     Write-Progress -Activity 'Đang sao lưu' -Completed
+
+    if ($diskFull) {
+        Write-Host ''
+        Write-Host '  Ổ đích hết chỗ giữa chừng. Đã dừng ngay tại tệp đó.' -ForegroundColor Red
+        Write-Host ('  Chép được {0:N0}/{1:N0} tệp trước khi hết chỗ.' -f $ok, $script:Scan.Count) -ForegroundColor Yellow
+        Write-Host '  Bản sao lưu này KHÔNG trọn vẹn nên không mở đường xóa.' -ForegroundColor Red
+    }
 
     Write-Host ''
     Write-Host '  Đang xác minh...' -ForegroundColor DarkGray
@@ -1644,21 +1699,31 @@ function Invoke-Backup {
         FullVerify = $fullVerify; Verified = $vChecked; VerifyFail = $vFail; CopyFail = $fail
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $destRun '_zalocleanup_backup.json') -Encoding UTF8
 
+    # DiskFull và phép so Ok với Total là BẮT BUỘC, không phải để hiển thị.
+    # Khi ổ đích hết chỗ, vòng chép dừng bằng break TRƯỚC lúc tăng $fail, nên
+    # Fail vẫn bằng 0 dù bản sao lưu dở dang. Chỉ xét Fail thôi là mở khóa bước
+    # xóa cho một bản sao lưu thiếu tệp — mất dữ liệu mà người dùng tin là đã
+    # có đường lui. Ghi thẳng trạng thái trọn vẹn vào đây để Invoke-Delete xét.
     $script:LastBackup = [pscustomobject]@{
         ScanStamp = $script:ScanStamp; Dest = $destRun
         Total = $script:Scan.Count; Ok = $ok; Fail = $fail; VerifyFail = $vFail
+        DiskFull = $diskFull
     }
 
     Write-Host ''
     Write-Host ("  Đã chép   : {0:N0} tệp" -f $ok) -ForegroundColor Green
     Write-Host ("  Xác minh  : {0:N0} tệp bằng SHA256" -f $vChecked) -ForegroundColor Green
     Write-Host ("  Vị trí    : {0}" -f $destRun) -ForegroundColor Green
-    if ($fail -gt 0 -or $vFail -gt 0) {
+    if ($fail -gt 0 -or $vFail -gt 0 -or $diskFull -or $ok -ne $script:Scan.Count) {
         $lf = Join-Path $script:LogDir ('saoluu_loi_' + $stamp + '.txt')
         $failLog | Set-Content -LiteralPath $lf -Encoding UTF8
         Write-Host ''
         if ($fail -gt 0)  { Write-Host ("  Chép lỗi     : {0:N0} tệp" -f $fail) -ForegroundColor Red }
         if ($vFail -gt 0) { Write-Host ("  Xác minh lỗi : {0:N0} tệp" -f $vFail) -ForegroundColor Red }
+        if ($ok -ne $script:Scan.Count) {
+            Write-Host ("  Thiếu        : {0:N0}/{1:N0} tệp chưa được chép" `
+                        -f ($script:Scan.Count - $ok), $script:Scan.Count) -ForegroundColor Red
+        }
         Write-Host  '  Bước xóa sẽ bị chặn cho đến khi sao lưu lại sạch.' -ForegroundColor Red
         Write-Host ("  Chi tiết: {0}" -f $lf) -ForegroundColor DarkGray
     } else {
@@ -1925,6 +1990,25 @@ function Invoke-Restore {
 }
 
 # ================================================================ xóa
+# Bản sao lưu chỉ được coi là SẠCH khi vừa không lỗi vừa TRỌN VẸN. Hai vế, không
+# phải một — và vế thứ hai mới là vế dễ mất.
+#
+# Khi ổ đích hết chỗ giữa chừng, vòng chép trong Invoke-Backup thoát bằng break
+# TRƯỚC lúc tăng $fail. Nên nếu chỉ xét Fail thì một bản sao lưu thiếu tệp vẫn
+# được chấm là sạch, và bước xóa được mở khóa cho một đường lui không tồn tại.
+#
+# Tách ra thành hàm riêng để phép thử gọi thẳng được. Ca ổ đích hết chỗ không
+# dựng lại được trong sandbox nếu không tạo ổ đĩa ảo; để điều kiện này nằm chìm
+# trong Invoke-Delete thì nó vĩnh viễn không có phép thử nào canh — mà bài học
+# đắt nhất của công cụ này là một nhánh không có test là một nhánh chưa từng chạy.
+function Test-BackupClean($bk, $scanStamp) {
+    if ($null -eq $bk) { return $false }
+    if ($bk.ScanStamp -ne $scanStamp) { return $false }
+    if ($bk.Fail -ne 0 -or $bk.VerifyFail -ne 0) { return $false }
+    if ($bk.DiskFull) { return $false }
+    return ($bk.Ok -eq $bk.Total)
+}
+
 function Invoke-Delete {
     if ($null -eq $script:Scan -or $script:Scan.Count -eq 0) { Write-Host 'Chưa có kết quả quét.' -ForegroundColor Yellow; return }
     $total = ($script:Scan | Measure-Object Size -Sum).Sum
@@ -1958,7 +2042,7 @@ function Invoke-Delete {
 
     # Chính sách sao lưu — chỉ áp dụng cho dữ liệu thật
     $hasBackup = ($null -ne $script:LastBackup -and $script:LastBackup.ScanStamp -eq $script:ScanStamp)
-    $cleanBackup = $hasBackup -and $script:LastBackup.Fail -eq 0 -and $script:LastBackup.VerifyFail -eq 0
+    $cleanBackup = Test-BackupClean $script:LastBackup $script:ScanStamp
 
     if ($isRealData -and $script:BackupPolicy -eq 'BATBUOC' -and -not $cleanBackup) {
         Write-Host ''
@@ -2762,7 +2846,10 @@ function Show-AdvancedMenu {
         Write-Host '   5  Loại trừ                6  Hồ sơ bộ lọc'
         Write-Host ''
         Write-Host '   7  Quét theo bộ lọc        8  Chi tiết + xuất CSV'
-        Write-Host '   9  Sao lưu và xác minh     X  Xóa kết quả quét đang giữ'
+        # Nhãn phải nói rõ là xóa TỆP TRÊN ĐĨA. Nhãn cũ "Xóa kết quả quét đang
+        # giữ" đọc tự nhiên trong tiếng Việt là "bỏ kết quả quét đi" — một việc
+        # vô hại — trong khi phím này gọi Invoke-Delete và xóa vĩnh viễn.
+        Write-Host '   9  Sao lưu và xác minh     X  Xóa hẳn tệp trong kết quả quét'
         Write-Host ''
         Write-Host '   K  Khôi phục từ bản sao lưu'
         Write-Host '   V  Shadow Copy             B  Vùng bảo vệ'

@@ -290,6 +290,23 @@ Assert 'Partitions sống sót qua lượt xóa theo bộ lọc' `
 Assert 'Tệp ngoài vùng bảo vệ vẫn bị xóa đúng' `
     (-not (Test-Path (Join-Path $rIn 'video\v1'))) 'Không xóa được tệp thường'
 
+# ---------------------------------------------------------------- nhãn phím X
+# Nhãn cũ "Xóa kết quả quét đang giữ" đọc tự nhiên trong tiếng Việt là "bỏ kết
+# quả quét đi" — một việc vô hại — trong khi phím này gọi Invoke-Delete và xóa
+# vĩnh viễn tệp trên đĩa. Nhãn của một phím phá hủy phải nói ra là nó phá hủy.
+Write-Host ''
+Write-Host '── Nhãn phím X phải nói rõ là xóa tệp trên đĩa' -ForegroundColor Yellow
+$rLbl = New-Sandbox 'nhanX'
+New-TestFile (Join-Path $rLbl 'video\a1') (New-Object byte[] 512) $old
+$oLbl = Invoke-Tool $rLbl @('9', '0', '0')
+Assert 'Menu nâng cao nói rõ phím X xóa tệp' ($oLbl -match 'X\s+Xóa hẳn tệp') `
+    'Nhãn không nói rõ là xóa tệp trên đĩa'
+Assert 'Không còn nhãn mơ hồ "Xóa kết quả quét đang giữ"' `
+    (-not ($oLbl -match 'X\s+Xóa kết quả quét đang giữ')) 'Nhãn mơ hồ vẫn còn'
+Assert 'Nhãn mới không làm hỏng menu nâng cao' ($oLbl -match 'Sao lưu và xác minh') 'Menu vỡ'
+Assert 'Chỉ xem nhãn thì không tệp nào bị đụng' `
+    (@(Get-ChildItem $rLbl -Recurse -File -Force -EA SilentlyContinue).Count -eq 1) 'Đã xóa nhầm'
+
 # ---------------------------------------------------------------- G3 dung lượng ổ đích
 Write-Host ''
 Write-Host '── G3: sao lưu kiểm tra dung lượng ổ đích' -ForegroundColor Yellow
@@ -313,7 +330,8 @@ Write-Host '── Hạ tầng: Get-RelPath, Remove-EmptyDirs, vùng bảo vệ'
 $errs2 = $null; $toks2 = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$toks2, [ref]$errs2)
 foreach ($fn in @('Get-RelPath', 'Test-Protected', 'Build-ProtectedIndex', 'Test-ProtectedRoot',
-                  'Initialize-ProtectedAbs',
+                  'Initialize-ProtectedAbs', 'Remove-ToneMarks', 'Test-ConfirmPhrase',
+                  'Test-BackupClean',
                   'Test-IsReparsePoint', 'Remove-EmptyDirs', 'Invoke-TruncateLocked',
                   'Test-CatalogEntry', 'Get-CatalogDefs', 'Get-CatalogDefaults',
                   'Get-FreeBytes', 'Get-LongPath', 'Get-DriveLabel')) {
@@ -354,6 +372,82 @@ Assert 'Chặn .cargo\bin'        (Test-Protected (Join-Path $env:USERPROFILE '.
 Assert 'Chặn .rustup'           (Test-Protected (Join-Path $env:USERPROFILE '.rustup\toolchains\x')) 'Không chặn'
 Assert 'Công cụ không tự xóa chính mình' (Test-Protected $tool) 'Tự xóa được chính mình'
 Assert 'Không chặn nhầm cache thường' (-not (Test-Protected (Join-Path $env:USERPROFILE '.cache\pip\x'))) 'Chặn nhầm'
+
+# ---------------------------------------------------------------- cụm từ xác nhận
+# Tiếng Việt có hai kiểu đặt dấu đều đúng chính tả: XÓA và XOÁ. Bộ gõ đặt dấu
+# kiểu nào là do người dùng chọn. Bản cũ chỉ nhận XÓA nên người gõ XOÁ bị từ
+# chối và kết luận hợp lý nhất của họ là công cụ hỏng.
+#
+# Vế còn lại quan trọng ngang: nới ra chuyện đặt dấu nhưng KHÔNG được nới ra
+# chuyện hoa thường. Chữ thường vẫn phải bị từ chối, nếu không thì ma sát của
+# bước xác nhận cuối cùng bị mài mòn.
+Write-Host ''
+Write-Host '── Cụm từ xác nhận: nhận mọi kiểu đặt dấu, vẫn phân biệt hoa thường' -ForegroundColor Yellow
+$phraseCases = @(
+    @{ In = 'XÓA';                 Expect = $true;  Why = 'dấu kiểu cũ' }
+    @{ In = 'XOÁ';                 Expect = $true;  Why = 'dấu kiểu mới — ca gây lỗi' }
+    @{ In = 'XOA';                 Expect = $true;  Why = 'không dấu' }
+    @{ In = 'xóa';                 Expect = $false; Why = 'chữ thường' }
+    @{ In = 'xoá';                 Expect = $false; Why = 'chữ thường, dấu kiểu mới' }
+    @{ In = 'Xóa';                 Expect = $false; Why = 'viết hoa nửa vời' }
+    @{ In = 'XÓA ';                Expect = $false; Why = 'thừa dấu cách' }
+    @{ In = 'XÓAA';                Expect = $false; Why = 'thừa chữ' }
+    @{ In = '';                    Expect = $false; Why = 'rỗng' }
+    @{ In = 'CÓ';                  Expect = $false; Why = 'chữ khác' }
+)
+$phraseBad = @()
+foreach ($c in $phraseCases) {
+    $got = [bool](Test-ConfirmPhrase $c.In 'XÓA' 'XOA')
+    if ($got -ne $c.Expect) { $phraseBad += ("'" + $c.In + "' (" + $c.Why + ") mong đợi " + $c.Expect + " nhận " + $got) }
+}
+Assert ("Cụm XÓA xử lý đúng cả $($phraseCases.Count) ca") ($phraseBad.Count -eq 0) ($phraseBad -join ' | ')
+Assert 'Cụm XOÁ được chấp nhận' ([bool](Test-ConfirmPhrase 'XOÁ' 'XÓA' 'XOA')) 'Từ chối kiểu đặt dấu hợp lệ'
+Assert 'Cụm nhiều chữ cũng nhận mọi kiểu đặt dấu' `
+    ([bool](Test-ConfirmPhrase 'XOÁ HẾT BẢN CHỤP' 'XÓA HẾT BẢN CHỤP' 'XOA HET BAN CHUP')) 'Từ chối'
+Assert 'TÔI CHẤP NHẬN MẤT vẫn nhận đủ ba dạng' `
+    ([bool](Test-ConfirmPhrase 'TÔI CHẤP NHẬN MẤT' 'TÔI CHẤP NHẬN MẤT' 'TOI CHAP NHAN MAT') -and
+     [bool](Test-ConfirmPhrase 'TOI CHAP NHAN MAT' 'TÔI CHẤP NHẬN MẤT' 'TOI CHAP NHAN MAT') -and
+     -not [bool](Test-ConfirmPhrase 'tôi chấp nhận mất' 'TÔI CHẤP NHẬN MẤT' 'TOI CHAP NHAN MAT')) 'Sai'
+Assert 'Remove-ToneMarks giữ nguyên chữ Đ' ((Remove-ToneMarks 'ĐÃ XÓA') -ceq 'ĐA XOA') `
+    ("Nhận được: " + (Remove-ToneMarks 'ĐÃ XÓA'))
+
+# ---------------------------------------------------------------- chốt sao lưu sạch
+# Sạch = không lỗi VÀ trọn vẹn. Ca nguy hiểm nhất là ổ đích hết chỗ giữa chừng:
+# vòng chép thoát bằng break trước khi kịp tăng Fail, nên Fail vẫn bằng 0 dù bản
+# sao lưu thiếu tệp. Chỉ xét Fail là mở khóa bước xóa cho một đường lui không
+# tồn tại. Ca đó không dựng lại được trong sandbox nếu không tạo ổ đĩa ảo, nên
+# điều kiện được tách thành hàm riêng để gọi thẳng ở đây.
+Write-Host ''
+Write-Host '── Chốt "sao lưu sạch": không lỗi VÀ trọn vẹn' -ForegroundColor Yellow
+function New-Bk($h) {
+    $d = @{ ScanStamp = 'S1'; Total = 100; Ok = 100; Fail = 0; VerifyFail = 0; DiskFull = $false }
+    foreach ($k in $h.Keys) { $d[$k] = $h[$k] }
+    return [pscustomobject]$d
+}
+$bkCases = @(
+    @{ Bk = (New-Bk @{});                          Expect = $true;  Why = 'đủ 100/100, không lỗi' }
+    @{ Bk = (New-Bk @{ DiskFull = $true; Ok = 40 }); Expect = $false; Why = 'hết chỗ giữa chừng — CA CHÍNH' }
+    # Ca này trong thực tế không xảy ra: hết chỗ thì Ok phải nhỏ hơn Total. Nó ở
+    # đây để ghim rằng cờ DiskFull TỰ NÓ đủ sức chặn, không nhờ phép đếm bắt hộ.
+    # Thiếu ca này thì gỡ hẳn chốt DiskFull đi bộ test vẫn xanh.
+    @{ Bk = (New-Bk @{ DiskFull = $true });        Expect = $false; Why = 'cờ hết chỗ tự nó phải chặn' }
+    @{ Bk = (New-Bk @{ Ok = 40 });                 Expect = $false; Why = 'thiếu tệp mà Fail vẫn 0' }
+    @{ Bk = (New-Bk @{ Fail = 1 });                Expect = $false; Why = 'có lỗi chép' }
+    @{ Bk = (New-Bk @{ VerifyFail = 1 });          Expect = $false; Why = 'có lỗi xác minh' }
+    @{ Bk = (New-Bk @{ ScanStamp = 'S2' });        Expect = $false; Why = 'sao lưu của lượt quét khác' }
+    @{ Bk = $null;                                 Expect = $false; Why = 'chưa sao lưu' }
+)
+$bkBad = @()
+foreach ($c in $bkCases) {
+    $got = [bool](Test-BackupClean $c.Bk 'S1')
+    if ($got -ne $c.Expect) { $bkBad += ($c.Why + ': mong đợi ' + $c.Expect + ' nhận ' + $got) }
+}
+Assert ("Chốt sao lưu sạch đúng cả $($bkCases.Count) ca") ($bkBad.Count -eq 0) ($bkBad -join ' | ')
+Assert 'Sao lưu dừng vì hết chỗ KHÔNG mở khóa bước xóa' `
+    (-not [bool](Test-BackupClean (New-Bk @{ DiskFull = $true; Ok = 40 }) 'S1')) `
+    'Mở khóa xóa cho bản sao lưu dở dang'
+Assert 'Sao lưu thiếu tệp mà không báo lỗi vẫn bị chặn' `
+    (-not [bool](Test-BackupClean (New-Bk @{ Ok = 99 }) 'S1')) 'Thiếu 1 tệp vẫn cho xóa'
 
 # ---------------------------------------------------------------- vùng bảo vệ: đối chiếu với bản đặc tả
 # Test-Protected chạy cho từng tệp trong mọi lượt quét nên đã được tăng tốc

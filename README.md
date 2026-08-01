@@ -11,7 +11,7 @@
 [![Version](https://img.shields.io/badge/version-5.0-CC2929?style=for-the-badge)](https://github.com/doivamong/zalo-cleanup)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1-5391FE?style=for-the-badge&logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#-cài-đặt-60-giây)
-[![Tests](https://img.shields.io/badge/tests-158%20passing-2EA043?style=for-the-badge)](#-phát-triển--đóng-góp)
+[![Tests](https://img.shields.io/badge/tests-175%20passing-2EA043?style=for-the-badge)](#-phát-triển--đóng-góp)
 [![License](https://img.shields.io/badge/license-MIT-000000?style=for-the-badge)](LICENSE)
 
 <kbd>[📌 Vì sao](#-vì-sao-có-công-cụ-này)</kbd> ·
@@ -55,7 +55,7 @@
 | **Hard-coded protected zones** | Covers the Zalo message database, Windows system directories, and installed toolchains — checked in both directions (a path *containing* a protected zone is refused too) and never traversing junctions or symlinks. |
 | **Manual only, by design** | No scheduled task, no background service, no delete-on-reboot. Every action completes before you close the window. |
 
-Requires Windows 10/11 and the built-in PowerShell 5.1. No installation, no dependencies. Ships with a **158-case regression suite** that builds its own sandbox in `%TEMP%`.
+Requires Windows 10/11 and the built-in PowerShell 5.1. No installation, no dependencies. Ships with a **175-case regression suite** that builds its own sandbox in `%TEMP%`.
 
 Not affiliated with VNG Corporation. MIT licensed.
 
@@ -494,8 +494,8 @@ Ngoài ra có `khoiphuc_*.log`, `saoluu_loi_*.txt`, và `quet_*.csv`. Phím `L` 
 
 | Quy mô mã nguồn | |
 |:---|---:|
-| `ZaloCleanup.ps1` | 2.849 dòng · 80 hàm |
-| `ZaloCleanup.Tests.ps1` | 864 dòng · **158 phép thử** |
+| `ZaloCleanup.ps1` | 2.946 dòng · 82 hàm |
+| `ZaloCleanup.Tests.ps1` | 986 dòng · **175 phép thử** |
 | Mục trong `catalog.json` | 33 (20 đã kiểm chứng tận nơi) |
 | Luật vùng bảo vệ | 15 mức `tất cả` + 8 mức `gốc` |
 | Phụ thuộc ngoài | **0** |
@@ -540,7 +540,7 @@ Nút cổ chai còn lại của bước băm là ổ đĩa chứ không phải C
 | `7` | Quét theo bộ lọc |
 | `8` | Xem chi tiết kết quả quét, xuất toàn bộ danh sách ra CSV |
 | `9` | Sao lưu kết quả quét sang ổ khác, kèm bước xác minh |
-| `X` | Xóa kết quả quét đang giữ |
+| `X` | Xóa hẳn tệp trong kết quả quét |
 | `K` | Khôi phục từ một bản sao lưu |
 
 **Thông tin và cài đặt**
@@ -715,7 +715,7 @@ Phần mềm được cung cấp "nguyên trạng", không kèm bảo đảm nà
 
 **Dọn dẹp Zalo** `v5.0`
 
-Built with 💙 PowerShell · 🪟 Windows · 🔐 SHA-256 · 🧪 158 tests
+Built with 💙 PowerShell · 🪟 Windows · 🔐 SHA-256 · 🧪 175 tests
 
 <sub>Thủ công hoàn toàn · Không phụ thuộc · Không chạy nền · MIT</sub>
 

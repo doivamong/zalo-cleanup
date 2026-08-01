@@ -262,6 +262,34 @@ Assert 'Partitions vẫn còn sau khi dọn cache' (Test-Path (Join-Path $dataRo
 $o = Invoke-Tool $r4 @('9', 'B', '', '', '0') $dataRoot
 Assert 'Báo cáo vùng bảo vệ chạy được' ($o -match 'chỉ báo cáo, không bao giờ xóa') 'Không hiện báo cáo'
 
+# ---------------------------------------------------------------- vùng bảo vệ nằm trong cây quét
+# G9 ở trên đặt vùng bảo vệ NGOÀI cây quét, nên không phủ được nhánh này.
+# Quan trọng vì Invoke-Scan gọi Test-PassFilterUnguarded: lớp chặn duy nhất của
+# lượt quét theo bộ lọc là lần Test-Protected ở đầu vòng lặp. Ai lỡ bỏ dòng đó
+# thì tệp trong vùng bảo vệ lọt thẳng vào danh sách xóa.
+#
+# Phép thử then chốt là con số "Tìm thấy": Invoke-Delete còn một lớp chặn nữa,
+# nên nếu chỉ nhìn "Database còn hay mất" thì lượt quét có rò cũng không lộ.
+Write-Host ''
+Write-Host '── Vùng bảo vệ nằm ngay trong cây quét' -ForegroundColor Yellow
+$rIn = New-Sandbox 'protinside'
+New-TestFile (Join-Path $rIn 'video\v1') (New-Object byte[] 1024) $old
+New-TestFile (Join-Path $rIn 'video\v2') (New-Object byte[] 1024) $old
+New-TestFile (Join-Path $rIn 'Database\_production\chat.db') (New-Object byte[] 8192) $old
+New-TestFile (Join-Path $rIn 'Partitions\session\p1') (New-Object byte[] 4096) $old
+$oIn = Invoke-Tool $rIn @('9', '7', '', 'X', '2', 'XÓA', '', '', '0') $rIn
+
+Assert 'Quét theo bộ lọc báo có chặn tệp thuộc vùng bảo vệ' ($oIn -match 'Đã chặn') `
+    'Không báo đã chặn tệp nào'
+Assert 'Quét theo bộ lọc chỉ nhận 2 tệp ngoài vùng bảo vệ' ((Get-ReportedCount $oIn 'Tìm thấy') -eq 2) `
+    ("Công cụ báo " + (Get-ReportedCount $oIn 'Tìm thấy') + " tệp")
+Assert 'Database sống sót qua lượt xóa theo bộ lọc' `
+    (Test-Path (Join-Path $rIn 'Database\_production\chat.db')) 'Database bị xóa'
+Assert 'Partitions sống sót qua lượt xóa theo bộ lọc' `
+    (Test-Path (Join-Path $rIn 'Partitions\session\p1')) 'Partitions bị xóa'
+Assert 'Tệp ngoài vùng bảo vệ vẫn bị xóa đúng' `
+    (-not (Test-Path (Join-Path $rIn 'video\v1'))) 'Không xóa được tệp thường'
+
 # ---------------------------------------------------------------- G3 dung lượng ổ đích
 Write-Host ''
 Write-Host '── G3: sao lưu kiểm tra dung lượng ổ đích' -ForegroundColor Yellow

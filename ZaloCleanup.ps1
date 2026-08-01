@@ -635,8 +635,17 @@ function Get-TreeSize([switch]$Force) {
 }
 
 # ================================================================ quét theo bộ lọc
-function Test-PassFilter($file) {
-    if (Test-Protected $file.FullName) { return $false }
+# Lọc theo đuôi tệp, thư mục loại trừ và .rescache.
+#
+# KHÔNG kiểm vùng bảo vệ — chữ "Unguarded" nằm trong tên để chỗ gọi tự nói ra
+# điều đó, chứ không bắt người đọc phải mở hàm ra mới biết. Người gọi có bổn
+# phận tự chạy Test-Protected TRƯỚC.
+#
+# Vì sao tách ra: Invoke-Scan đã kiểm vùng bảo vệ ngay đầu vòng lặp để còn đếm
+# số tệp bị chặn, nên kiểm lại ở đây là hỏi hai lần cùng một câu về cùng một
+# tệp — đo được 0,78 giây trên 56.914 tệp. Thêm người gọi mới thì phải tự đặt
+# Test-Protected trước, không có ngoại lệ.
+function Test-PassFilterUnguarded($file) {
     if ($script:KeepRescache -and $file.Extension -eq '.rescache') { return $false }
     $e = $file.Extension.ToLower()
     if ($e -eq '') { $e = '(không đuôi)' }
@@ -694,7 +703,8 @@ function Invoke-Scan([switch]$Quiet) {
             $t = $f.LastWriteTime
             if ($t -lt $lo -or $t -gt $hi) { continue }
             if ($f.Length -lt $minBytes) { continue }
-            if (-not (Test-PassFilter $f)) { continue }
+            # An toàn vì vùng bảo vệ đã được kiểm ở ngay đầu vòng lặp này.
+            if (-not (Test-PassFilterUnguarded $f)) { continue }
             $hits.Add([pscustomobject]@{ Path = $f.FullName; Size = $f.Length; Date = $t; Keeper = '' })
         }
     }

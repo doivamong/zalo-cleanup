@@ -541,6 +541,18 @@ Assert 'Vòng quét có kiểm vùng bảo vệ' (Test-FnCallsFn $astWire 'Invok
     'Invoke-Scan không còn kiểm vùng bảo vệ'
 $bkNode = $astWire.Find({ param($x)
     $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $x.Name -eq 'Invoke-Backup' }, $true)
+Assert 'Sao lưu vẫn ép xác minh toàn bộ với ổ tháo rời và ổ mạng' `
+    ($null -ne $bkNode -and $bkNode.Extent.Text -match 'Get-DriveKind' -and
+     $bkNode.Extent.Text -match 'Removable' -and $bkNode.Extent.Text -match 'Network') `
+    'Mất chốt ép xác minh 100% cho ổ tháo rời và ổ mạng'
+Assert 'Khởi động có lấy khóa một-tiến-trình' `
+    ((Get-Content $tool -Raw -Encoding UTF8) -match 'if \(-not \(Enter-SingleInstance\)\)') `
+    'Không còn lấy khóa lúc khởi động'
+$reNode = $astWire.Find({ param($x)
+    $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+    $x.Name -eq 'Restore-Environment' }, $true)
+Assert 'Thoát có trả khóa' ($null -ne $reNode -and $reNode.Extent.Text -match 'Exit-SingleInstance') `
+    'Restore-Environment không trả khóa — lần mở sau sẽ bị chặn oan'
 Assert 'Vòng sao lưu vẫn chặn đường dẫn ra ngoài thư mục sao lưu' `
     ($null -ne $bkNode -and $bkNode.Extent.Text -match 'IsPathRooted') `
     'Mất chốt IsPathRooted — bản sao lưu có thể ghi ra ngoài thư mục đích'

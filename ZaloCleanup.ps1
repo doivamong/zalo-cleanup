@@ -240,6 +240,16 @@ function Get-DriveLabel($path) {
     catch { return $script:SysDrive.TrimEnd(':') }
 }
 
+# Loại ổ đĩa của một đường dẫn: Fixed, Removable, Network, CDRom, Ram, Unknown.
+# Đường dẫn UNC phải nhận ra bằng tay vì DriveInfo không dựng được từ \\máy\chiasẻ.
+function Get-DriveKind($path) {
+    try {
+        $full = [IO.Path]::GetFullPath($path)
+        if ($full.StartsWith('\\')) { return 'Network' }
+        return ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($full))).DriveType.ToString()
+    } catch { return 'Unknown' }
+}
+
 # Đường dẫn dài quá 260 ký tự cần tiền tố đặc biệt, trừ khi Windows đã bật
 # hỗ trợ long path. Mặc định của Windows là TẮT.
 function Get-LongPath($path) {
@@ -248,6 +258,63 @@ function Get-LongPath($path) {
     if ($path.StartsWith('\\?\')) { return $path }
     if ($path.StartsWith('\\')) { return '\\?\UNC\' + $path.Substring(2) }
     return '\\?\' + $path
+}
+
+# ---------------------------------------------------------------- một tiến trình một lúc
+# Hai bản của công cụ — bản PowerShell này và bản Rust sau này — thao tác trên
+# cùng một tập tệp. Chạy song song là chế độ đã chốt, nên cảnh hai bản cùng mở
+# SẼ xảy ra chứ không phải giả định.
+#
+# Hai bản cùng chạy thì kết quả quét của bản này lỗi thời vì bản kia vừa xóa,
+# mà nguyên tắc bất biến số 1 và số 2 dựng lên chính là để chống chuyện đó.
+#
+# TÊN KHÓA LÀ HỢP ĐỒNG GIỮA HAI BẢN. Bản Rust phải lấy đúng tên này, không được
+# đổi. Dùng phạm vi Local nên khóa theo từng phiên đăng nhập — đúng điều ta muốn,
+# vì hai người dùng khác nhau trên cùng một máy có dữ liệu Zalo riêng.
+$script:LockName  = 'Local\ZaloCleanup.singleton'
+$script:LockFile  = Join-Path $env:TEMP 'zalocleanup.lock'
+$script:LockMutex = $null
+
+function Enter-SingleInstance {
+    $created = $false
+    try {
+        $script:LockMutex = New-Object Threading.Mutex($true, $script:LockName, [ref]$created)
+    } catch {
+        # Không dựng được mutex thì đừng chặn người dùng — thà chạy còn hơn
+        # không mở được công cụ vì một cơ chế phụ trợ.
+        $script:LockMutex = $null
+        return $true
+    }
+    if (-not $created) {
+        try { $created = $script:LockMutex.WaitOne(0) }
+        catch [Threading.AbandonedMutexException] {
+            # Tiến trình trước chết mà chưa trả khóa. Ngoại lệ này nghĩa là ta ĐÃ
+            # nhận được khóa, không phải là hỏng.
+            $created = $true
+        } catch { $created = $false }
+    }
+    if ($created) {
+        try { Set-Content -LiteralPath $script:LockFile -Value ("{0}`t{1}`t{2}" -f $PID, 'powershell', (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')) -Encoding UTF8 } catch { }
+    }
+    return $created
+}
+
+function Get-LockHolder {
+    try {
+        $raw = (Get-Content -LiteralPath $script:LockFile -Raw -Encoding UTF8).Trim()
+        $p = $raw -split "`t"
+        if ($p.Count -ge 3) { return ('tiến trình {0} ({1}), mở lúc {2}' -f $p[0], $p[1], $p[2]) }
+    } catch { }
+    return 'một bản khác đang mở'
+}
+
+function Exit-SingleInstance {
+    if ($null -ne $script:LockMutex) {
+        try { $script:LockMutex.ReleaseMutex() } catch { }
+        try { $script:LockMutex.Dispose() } catch { }
+        $script:LockMutex = $null
+        try { Remove-Item -LiteralPath $script:LockFile -Force -ErrorAction SilentlyContinue } catch { }
+    }
 }
 
 function Initialize-Environment {
@@ -278,6 +345,7 @@ function Restore-Environment {
     if ($null -ne $script:OldCodePage) {
         try { & chcp $script:OldCodePage | Out-Null } catch { }
     }
+    Exit-SingleInstance
 }
 
 function Show-EnvironmentWarnings {
@@ -1566,10 +1634,23 @@ function Invoke-Backup {
     Write-Host '  Đủ chỗ.' -ForegroundColor Green
 
     Write-Host ''
-    Write-Host '  Mức xác minh sau khi chép:'
-    Write-Host '   1  Kích thước toàn bộ, cộng SHA256 mẫu 50 tệp  (nhanh, mặc định)'
-    Write-Host '   2  SHA256 toàn bộ                              (chậm nhưng chắc chắn tuyệt đối)'
-    $fullVerify = ((Read-Line '  Chọn (Enter = 1)') -eq '2')
+    # Ổ tháo rời và ổ mạng là nơi hay xảy ra hỏng nội dung mà kích thước vẫn
+    # đúng — đúng loại lỗi duy nhất mà mẫu 50 tệp bỏ lọt. Ở đó thì không cho
+    # chọn mức nhanh, vì mức nhanh không kết luận được gì về nội dung.
+    $destKind = Get-DriveKind $dest
+    if ($destKind -eq 'Removable' -or $destKind -eq 'Network') {
+        $tenLoai = 'tháo rời'
+        if ($destKind -eq 'Network') { $tenLoai = 'mạng' }
+        Write-Host ('  Ổ đích là ổ {0} nên bắt buộc xác minh SHA256 toàn bộ.' -f $tenLoai) -ForegroundColor Yellow
+        Write-Host '  Đó là nơi hay hỏng nội dung mà kích thước vẫn đúng, tức là đúng loại' -ForegroundColor DarkGray
+        Write-Host '  lỗi mà mẫu 50 tệp không bao giờ bắt được.' -ForegroundColor DarkGray
+        $fullVerify = $true
+    } else {
+        Write-Host '  Mức xác minh sau khi chép:'
+        Write-Host '   1  Kích thước toàn bộ, cộng SHA256 mẫu 50 tệp  (nhanh, mặc định)'
+        Write-Host '   2  SHA256 toàn bộ                              (chậm nhưng chắc chắn tuyệt đối)'
+        $fullVerify = ((Read-Line '  Chọn (Enter = 1)') -eq '2')
+    }
 
     $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $destRun = Join-Path $dest $stamp
@@ -1712,7 +1793,10 @@ function Invoke-Backup {
 
     Write-Host ''
     Write-Host ("  Đã chép   : {0:N0} tệp" -f $ok) -ForegroundColor Green
-    Write-Host ("  Xác minh  : {0:N0} tệp bằng SHA256" -f $vChecked) -ForegroundColor Green
+    # Nói đúng ĐỘ PHỦ, đừng nói gọn thành một chữ "đã xác minh". Kích thước được
+    # đối chiếu cho 100% số tệp đã chép; SHA256 thì chỉ cho phần đã băm. Gộp hai
+    # con số ấy vào một chữ là cấp bảo chứng rộng hơn thứ thật sự đã kiểm.
+    Write-Host ("  Xác minh  : kích thước {0:N0}/{0:N0} tệp · SHA256 {1:N0}/{0:N0} tệp" -f $ok, $vChecked) -ForegroundColor Green
     Write-Host ("  Vị trí    : {0}" -f $destRun) -ForegroundColor Green
     if ($fail -gt 0 -or $vFail -gt 0 -or $diskFull -or $ok -ne $script:Scan.Count) {
         $lf = Join-Path $script:LogDir ('saoluu_loi_' + $stamp + '.txt')
@@ -1726,8 +1810,12 @@ function Invoke-Backup {
         }
         Write-Host  '  Bước xóa sẽ bị chặn cho đến khi sao lưu lại sạch.' -ForegroundColor Red
         Write-Host ("  Chi tiết: {0}" -f $lf) -ForegroundColor DarkGray
+    } elseif ($fullVerify) {
+        Write-Host '  Sao lưu sạch — đã đối chiếu SHA256 toàn bộ. Đã mở khóa bước xóa.' -ForegroundColor Green
     } else {
-        Write-Host '  Sao lưu sạch. Đã mở khóa bước xóa.' -ForegroundColor Green
+        Write-Host ('  Sao lưu sạch ở mức đã kiểm: kích thước 100%, SHA256 {0:N0}/{1:N0} tệp.' -f $vChecked, $ok) -ForegroundColor Green
+        Write-Host '  Phần chưa băm có thể hỏng nội dung mà kích thước vẫn đúng.' -ForegroundColor DarkGray
+        Write-Host '  Đã mở khóa bước xóa.' -ForegroundColor Green
     }
 }
 
@@ -2970,6 +3058,22 @@ function Show-Home {
 
 # ================================================================ main
 Initialize-Environment
+
+# Chặn ngay từ đầu, trước khi kịp quét hay hiện gì. Mở hai bản cùng lúc thì kết
+# quả quét của bản này lỗi thời vì bản kia vừa xóa — đúng thứ mà nguyên tắc bất
+# biến số 1 và số 2 dựng lên để chống.
+if (-not (Enter-SingleInstance)) {
+    Write-Host ''
+    Write-Host '  Đã có một bản Dọn dẹp Zalo đang mở.' -ForegroundColor Yellow
+    Write-Host ('  ' + (Get-LockHolder)) -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '  Hai bản cùng chạy thì kết quả quét của bản này có thể lỗi thời vì' -ForegroundColor DarkGray
+    Write-Host '  bản kia vừa xóa mất tệp. Đóng bản kia rồi mở lại.' -ForegroundColor DarkGray
+    Write-Host ''
+    Restore-Environment
+    exit 1
+}
+
 Read-Settings
 Initialize-ProtectedAbs
 if ($script:Root -eq '' -or -not (Test-Path -LiteralPath $script:Root)) { Select-Root -Quiet }

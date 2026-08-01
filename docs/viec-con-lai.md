@@ -1,6 +1,6 @@
 # Việc còn lại — và prompt khởi động phiên triển khai
 
-> Rà soát ngày **01/08/2026** · **189/189 phép thử đạt**
+> Rà soát ngày **01/08/2026** · **192/192 phép thử đạt**
 >
 > Nguồn: [`rust-port-brief.md`](rust-port-brief.md) · [`ui-ux-council.md`](ui-ux-council.md) · [`quyet-dinh.md`](quyet-dinh.md)
 > Mọi việc dưới đây đều đã truy về tận mã nguồn, không lấy từ trí nhớ.
@@ -43,15 +43,33 @@ Chỉ so tồn tại và cỡ, **không băm lại** — băm lại là đọc t
 
 ---
 
-# P1 — Bản PowerShell, làm được ngay, có lợi ngay
+# P1 — Bản PowerShell · ✅ ĐÃ XONG PHẦN LÀM ĐƯỢC
 
-| # | Việc | Nguồn | Ghi chú |
-|:-:|:---|:---|:---|
-| **P1-1** | **Khóa liên tiến trình.** Mutex đặt tên + tệp khóa mang PID, dùng chung với bản Rust sau này | T-2 · Q4③ · QĐ-05 | Chạy song song đã là chế độ chốt, nên cảnh hai bản cùng mở **sẽ** xảy ra. Cũng là điều kiện để ship nút "Mở bản dòng lệnh" (Q7) |
-| **P1-2** | **Nhãn xác minh nói đúng độ phủ.** Thay một chữ "sạch" bằng hai con số thật: 100% cỡ tệp + số tệp đã băm | T-3 · Q5 | Nhãn hiện tại cấp bảo chứng rộng hơn thứ nó thật sự kiểm |
-| **P1-3** | **Ép xác minh 100% với ổ tháo rời và ổ mạng** | Q5 | Đó là nơi lỗi bit im lặng hay xảy ra |
-| **P1-4** | **README giới hạn phạm vi "0 phụ thuộc"** cho bản PowerShell | Q3 | Bản Rust kéo 112 crate. Để câu đó phủ cả hai bản là nói dối |
-| **P1-5** | **Kiểm ngoại tuyến** để đóng nốt phần còn treo của Q9① | Q9① | Ngắt mạng, mở hội thoại cũ đã dọn. Còn hiện = đọc bản gốc tại chỗ. Ô trống = tải lại từ máy chủ, và khi đó câu *"không mất một tấm ảnh nào"* phải viết lại kèm điều kiện |
+| # | Việc | Trạng thái |
+|:-:|:---|:---|
+| **P1-1** | **Khóa một tiến trình một lúc.** Mutex `Local\ZaloCleanup.singleton` + tệp khóa mang PID trong `%TEMP%` | ✅ **xong** |
+| **P1-2** | **Nhãn xác minh nói đúng độ phủ** — hai con số thật thay cho một chữ "sạch" | ✅ **xong** |
+| **P1-3** | **Ép xác minh 100% với ổ tháo rời và ổ mạng** | ✅ **xong** |
+| **P1-4** | README giới hạn phạm vi "0 phụ thuộc" | ⏭ **hoãn tới lúc phát hành bản Rust** |
+| **P1-5** | Kiểm ngoại tuyến để đóng nốt Q9① | ⏸ **việc tay của chủ dự án** |
+
+## Vì sao hoãn P1-4
+
+Hôm nay câu "0 phụ thuộc" trong README **vẫn đúng**: repo chỉ có bản PowerShell, và nó thật sự không phụ thuộc gì. Sửa ngay bây giờ là mô tả một bản chưa tồn tại — làm người đọc rối chứ không làm họ hiểu đúng hơn.
+
+Câu đó chỉ thành sai **vào đúng ngày bản Rust được phát hành**. Nên đây là **cổng phát hành**, không phải việc tồn đọng. Sáu chỗ phải sửa lúc đó: dòng 7 · 58 · 114 · 501 · 678 · 720 của `README.md`.
+
+## Về P1-5
+
+Cần tay người, tôi không làm được: ngắt mạng, mở một hội thoại cũ đã bị dọn, cuộn tới ảnh cũ. Còn hiện = Zalo đọc bản gốc tại chỗ, chế độ khử trùng lặp an toàn tuyệt đối. Ô trống hoặc quay vòng tải = Zalo lấy từ máy chủ, và khi đó câu *"không mất một tấm ảnh nào"* phải viết lại kèm điều kiện.
+
+## Chi tiết ba mục đã làm
+
+**P1-1.** Tên khóa `Local\ZaloCleanup.singleton` **là hợp đồng giữa hai bản** — bản Rust phải lấy đúng tên này. Phạm vi `Local` nên khóa theo từng phiên đăng nhập, đúng ý đồ vì hai người dùng trên cùng một máy có dữ liệu Zalo riêng. Mutex bị bỏ rơi do tiến trình trước chết được xử lý như *đã nhận khóa* chứ không phải lỗi. Dựng mutex thất bại thì **không chặn người dùng** — thà chạy còn hơn không mở được công cụ vì một cơ chế phụ trợ.
+
+**P1-2.** `Xác minh : kích thước N/N tệp · SHA256 M/N tệp`. Dòng kết luận tách hai nhánh: xác minh toàn bộ thì nói "đã đối chiếu SHA256 toàn bộ"; mức mẫu thì nói thẳng *"sạch ở mức đã kiểm"* kèm cảnh báo phần chưa băm có thể hỏng nội dung mà kích thước vẫn đúng.
+
+**P1-3.** `Get-DriveKind` nhận ra ổ tháo rời và ổ mạng, kể cả đường dẫn UNC. Gặp hai loại đó thì **không hiện lựa chọn mức nhanh nữa** — không phải cảnh báo rồi vẫn cho chọn.
 
 ---
 
@@ -74,7 +92,7 @@ Chín câu ở mục 9 của [`rust-port-brief.md`](rust-port-brief.md). Tóm t�
 2. Chọn crate, và cân với lời hứa "0 phụ thuộc"
 3. Khung giao diện — **đã chốt egui** (QĐ-01), kế hoạch chỉ cần xác nhận
 4. Thứ tự làm, kèm chốt kiểm chứng từng bước
-5. 189 phép thử port kiểu gì — chúng đang lái công cụ bằng chuỗi phím qua stdin, cách đó không dùng lại được với giao diện đồ họa
+5. 192 phép thử port kiểu gì — chúng đang lái công cụ bằng chuỗi phím qua stdin, cách đó không dùng lại được với giao diện đồ họa
 6. Giữ tương thích bản sao lưu cũ, và kiểm chứng ra sao
 7. Ký số · SmartScreen · diệt virus · kiểm chứng nguồn · cập nhật
 8. Bố cục bên trong `rust\` và cách hai bản dùng chung tệp — **đã chốt cách chia** (Q11), kế hoạch chỉ cần chi tiết hóa
@@ -99,6 +117,7 @@ Chín câu ở mục 9 của [`rust-port-brief.md`](rust-port-brief.md). Tóm t�
 | **R-13** | **Chỉ đếm là đã xóa khi tệp thật sự biến mất** | Brief §7 |
 | **R-14** | **Sao lưu sạch = không lỗi VÀ trọn vẹn.** Hai vế | `Test-BackupClean` |
 | **R-15** | **Trình đọc màn hình là cổng mức 2, không phải mức 1.** egui + AccessKit chưa hoàn chỉnh | T-5 |
+| **R-16** | **Lấy đúng khóa `Local\ZaloCleanup.singleton`.** Tên khóa là hợp đồng giữa hai bản, đổi tên là hai bản cùng chạy được | P1-1 |
 
 ## P3-C · Chiến lược kiểm chứng, bắt buộc
 
@@ -106,7 +125,7 @@ Chín câu ở mục 9 của [`rust-port-brief.md`](rust-port-brief.md). Tóm t�
 - **So bằng SHA-256**, không so bằng số lượng
 - **Kiểm bằng đột biến** — cố tình phá một lớp an toàn rồi xem test có đỏ không
 - **Không chạy thử trên dữ liệu Zalo thật ở chế độ có xóa.** Chỉ quét
-- **189 phép thử hiện có là hợp đồng.** Port hết, không bỏ cái nào
+- **192 phép thử hiện có là hợp đồng.** Port hết, không bỏ cái nào
 
 ---
 
@@ -139,13 +158,13 @@ Bước 1 — làm P1.
 Bước 2 — lập kế hoạch port, trả lời chín câu ở P3-A.
   CHƯA viết code Rust ở bước này. Ra kế hoạch trước, có mốc dừng đo được.
 
-Bước 3 — bắt đầu port theo kế hoạch, lõi trước vỏ sau.
+Bước 2 — bắt đầu port theo kế hoạch, lõi trước vỏ sau.
   Mỗi bước phải có chốt đối chiếu song song với bản PowerShell.
 
 QUY TẮC BẤT DI DỊCH KHI LÀM:
 
 - Chạy bộ test sau MỖI lần sửa: powershell -NoProfile -ExecutionPolicy Bypass
-  -File ".\ZaloCleanup.Tests.ps1" -Full     (hiện 189/189 đạt)
+  -File ".\ZaloCleanup.Tests.ps1" -Full     (hiện 192/192 đạt)
 - Sửa lớp an toàn thì phải KIỂM BẰNG ĐỘT BIẾN: cố tình phá rồi xem test có đỏ
   không. Test không đỏ nghĩa là test vô dụng, không phải mã đúng.
 - Không chạy thử trên dữ liệu Zalo thật ở chế độ có xóa. Chỉ quét.

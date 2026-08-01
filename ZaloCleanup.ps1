@@ -69,6 +69,14 @@ $script:AppCacheRel = @('Cache', 'Code Cache', 'GPUCache', 'DawnGraphiteCache',
                         'DawnWebGPUCache', 'ShaderCache', 'media\update', 'media\temp')
 $script:StandaloneDirs = @('video', 'picture', 'voice', 'file')
 
+# Số luồng đọc đĩa cho bước băm nội dung.
+# Đo trên máy thật (SSD SATA, tệp chưa nằm trong bộ nhớ đệm): một luồng được
+# 41 MB/s, tám luồng được 53 MB/s. Đĩa mới là trần chứ không phải CPU — SHA256
+# của .NET chạy 840 MB/s khi dữ liệu đã ở trong RAM. Song song ở đây là để vắt
+# thêm hàng đợi của SSD, không phải để bắt CPU tính nhanh hơn. Quá tám luồng
+# không đo được cải thiện nào nữa.
+$script:HashThreads = [Math]::Min(8, [Math]::Max(1, [Environment]::ProcessorCount))
+
 # Chính sách sao lưu. Sao lưu KHÔNG bắt buộc.
 #   HOI     = mỗi lần xóa dữ liệu thật sẽ hỏi (mặc định)
 #   KHONG   = không hỏi
@@ -675,6 +683,107 @@ function Get-QuickSig($path, $size, $sha) {
     return 'Q:' + [BitConverter]::ToString($sha.ComputeHash($buf)).Replace('-', '')
 }
 
+# Thân của một luồng băm. Phải tự chứa mọi thứ vì runspace không thừa hưởng
+# hàm của script chính. Trả về hashtable đường dẫn -> chữ ký, $null nếu đọc lỗi.
+#   $mode = 'FULL'  băm toàn bộ nội dung, chữ ký mang tiền tố 'FULL:'
+#   $mode = 'QUICK' băm 64 KB đầu và 64 KB cuối, tiền tố 'Q:'
+#                   tệp từ 128 KB trở xuống thì đằng nào cũng đọc hết cả tệp,
+#                   nên trả thẳng 'FULL:' — chữ ký đó chính là SHA256 toàn tệp.
+# Hai tiền tố khác nhau để chữ ký nhanh không bao giờ bị đem so với chữ ký đầy đủ.
+$script:HashWorker = {
+    param($paths, $mode)
+    $out = @{}
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $chunk = 65536
+    try {
+        foreach ($p in $paths) {
+            try {
+                $fs = [IO.File]::OpenRead($p)
+                try {
+                    if ($mode -eq 'FULL' -or $fs.Length -le ($chunk * 2)) {
+                        $out[$p] = 'FULL:' + [BitConverter]::ToString($sha.ComputeHash($fs)).Replace('-', '')
+                    } else {
+                        # Đọc cho bằng đủ chứ không tin một lần Read trả về đúng
+                        # số byte đã xin. Read thiếu thì phần đuôi của bộ đệm còn
+                        # rác, hai tệp giống hệt nhau có thể ra hai chữ ký khác
+                        # nhau và bản trùng bị bỏ sót.
+                        $buf = New-Object byte[] ($chunk * 2)
+                        $got = 0
+                        while ($got -lt $chunk) {
+                            $n = $fs.Read($buf, $got, $chunk - $got)
+                            if ($n -le 0) { break }
+                            $got += $n
+                        }
+                        [void]$fs.Seek(-$chunk, [IO.SeekOrigin]::End)
+                        $got = 0
+                        while ($got -lt $chunk) {
+                            $n = $fs.Read($buf, $chunk + $got, $chunk - $got)
+                            if ($n -le 0) { break }
+                            $got += $n
+                        }
+                        $out[$p] = 'Q:' + [BitConverter]::ToString($sha.ComputeHash($buf)).Replace('-', '')
+                    }
+                } finally { $fs.Dispose() }
+            } catch { $out[$p] = $null }
+        }
+    } finally { $sha.Dispose() }
+    return $out
+}
+
+# Băm một mẻ tệp, chia cho nhiều luồng cùng đọc đĩa.
+#
+# Chỉ đúng phép băm được chạy song song. Băm là việc thuần túy tính toán: không
+# ghi, không xóa, không quyết định gì. Toàn bộ khâu so sánh, loại bỏ và xóa vẫn
+# nằm ở luồng chính và đọc được tuần tự từ trên xuống. Không bao giờ để luồng
+# phụ chạm tới việc xóa.
+function Get-HashSet($paths, $mode, $activity) {
+    $res = @{}
+    $list = @($paths)
+    if ($list.Count -eq 0) { return $res }
+
+    # Ít tệp thì dựng runspace còn đắt hơn là làm thẳng một mạch.
+    $n = [Math]::Min($script:HashThreads, $list.Count)
+    if ($n -le 1 -or $list.Count -lt 16) {
+        $r = & $script:HashWorker $list $mode
+        foreach ($k in $r.Keys) { $res[$k] = $r[$k] }
+        return $res
+    }
+
+    # Chia kiểu chia bài để mỗi luồng nhận lẫn lộn tệp to với tệp nhỏ, tránh
+    # cảnh một luồng ôm hết phần nặng còn các luồng khác ngồi không.
+    $chunks = New-Object 'Collections.Generic.List[object]'
+    for ($i = 0; $i -lt $n; $i++) { $chunks.Add((New-Object Collections.Generic.List[string])) }
+    for ($i = 0; $i -lt $list.Count; $i++) { $chunks[$i % $n].Add([string]$list[$i]) }
+
+    $pool = [RunspaceFactory]::CreateRunspacePool(1, $n)
+    $pool.Open()
+    $jobs = @()
+    try {
+        foreach ($c in $chunks) {
+            if ($c.Count -eq 0) { continue }
+            $ps = [PowerShell]::Create()
+            $ps.RunspacePool = $pool
+            [void]$ps.AddScript($script:HashWorker.ToString()).AddArgument($c.ToArray()).AddArgument($mode)
+            $jobs += [pscustomobject]@{ PS = $ps; Handle = $ps.BeginInvoke() }
+        }
+        $done = 0
+        foreach ($j in $jobs) {
+            foreach ($h in $j.PS.EndInvoke($j.Handle)) {
+                if ($h -isnot [hashtable]) { continue }
+                foreach ($k in $h.Keys) { $res[$k] = $h[$k] }
+            }
+            $done++
+            Write-Progress -Activity $activity -Status ("luồng {0}/{1}" -f $done, $jobs.Count) `
+                           -PercentComplete (($done / $jobs.Count) * 100)
+        }
+    } finally {
+        foreach ($j in $jobs) { try { $j.PS.Dispose() } catch { } }
+        try { $pool.Close(); $pool.Dispose() } catch { }
+        Write-Progress -Activity $activity -Completed
+    }
+    return $res
+}
+
 function Invoke-DedupScan {
     if (-not (Test-Path -LiteralPath $script:Root)) { Write-Host 'Thư mục gốc không hợp lệ.' -ForegroundColor Red; return }
     $resRoot = Join-Path $script:Root 'resource'
@@ -733,59 +842,75 @@ function Invoke-DedupScan {
     Write-Host '  Bước tiếp theo đọc đĩa để băm nội dung, có thể mất vài phút.' -ForegroundColor DarkGray
     if (-not (Read-YesNo '  Tiếp tục? (c/k)')) { Write-Host '  Đã hủy.' -ForegroundColor DarkGray; return }
 
-    $sha = [Security.Cryptography.SHA256]::Create()
     $dups = New-Object Collections.Generic.List[object]
     $quickReject = 0; $fullReject = 0; $err = 0
-    $keepQuick = @{}; $keepFull = @{}
     $sw = [Diagnostics.Stopwatch]::StartNew()
 
     try {
         Write-Host ''
         Write-Host '  Bước 3/4 · lọc nhanh bằng chữ ký đầu và cuối tệp...' -ForegroundColor DarkGray
-        $pairs = New-Object Collections.Generic.List[object]
-        $done = 0
-        foreach ($c in $cands) {
-            $done++
-            if ($done % 50 -eq 0) {
-                Write-Progress -Activity 'Lọc nhanh' -Status ("{0:N0}/{1:N0}" -f $done, $cands.Count) `
-                               -PercentComplete (($done / $cands.Count) * 100)
+
+        # Chỉ đụng tới bản giữ lại thuộc nhóm kích thước thật sự có ứng viên.
+        # Nhóm không có ứng viên nào thì không đọc đến, y như bản cũ.
+        # Khác bản cũ ở chỗ: trong một nhóm đã bị đụng thì băm hết bản giữ lại
+        # chứ không dừng ở bản khớp đầu tiên. Đổi lại được cả mẻ để chia luồng.
+        # Trên dữ liệu thật mỗi nhóm chỉ có trung bình 1,8 bản nên phần đọc thừa
+        # là không đáng kể.
+        $needSizes = @{}
+        foreach ($c in $cands) { $needSizes[$c.Size] = $true }
+        $batch = New-Object Collections.Generic.List[string]
+        foreach ($c in $cands) { $batch.Add($c.Path) }
+        foreach ($s in $needSizes.Keys) {
+            foreach ($kp in $keepBySize[$s]) {
+                if ([IO.File]::Exists($kp)) { $batch.Add($kp) }
             }
-            try {
-                $cq = Get-QuickSig $c.Path $c.Size $sha
-                foreach ($kp in $keepBySize[$c.Size]) {
-                    if (-not $keepQuick.ContainsKey($kp)) {
-                        if (-not [IO.File]::Exists($kp)) { continue }
-                        $keepQuick[$kp] = Get-QuickSig $kp $c.Size $sha
-                    }
-                    if ($keepQuick[$kp] -eq $cq) { $pairs.Add([pscustomobject]@{ Cand = $c; Keep = $kp }); break }
-                    else { $quickReject++ }
-                }
-            } catch { $err++ }
         }
-        Write-Progress -Activity 'Lọc nhanh' -Completed
+        $quick = Get-HashSet $batch 'QUICK' 'Lọc nhanh'
+
+        $pairs = New-Object Collections.Generic.List[object]
+        foreach ($c in $cands) {
+            $cq = $quick[$c.Path]
+            if ($null -eq $cq) { $err++; continue }
+            foreach ($kp in $keepBySize[$c.Size]) {
+                $kq = $quick[$kp]
+                if ($null -eq $kq) { continue }
+                if ($kq -eq $cq) { $pairs.Add([pscustomobject]@{ Cand = $c; Keep = $kp; Sig = $cq }); break }
+                else { $quickReject++ }
+            }
+        }
         Write-Host ("          {0:N0} cặp qua vòng lọc nhanh" -f $pairs.Count) -ForegroundColor DarkGray
 
         Write-Host '  Bước 4/4 · xác minh SHA256 toàn tệp...' -ForegroundColor DarkGray
-        $done = 0
+
+        # Tệp từ 128 KB trở xuống đã bị đọc trọn vẹn ở bước 3, nên chữ ký
+        # 'FULL:' của nó CHÍNH LÀ SHA256 toàn tệp — cặp nào khớp chữ ký đó thì
+        # đã xác minh xong, không phải đọc lại. Bản cũ vẫn đọc lại lần nữa ở
+        # bước này; với dữ liệu Zalo thật thì gần như mọi ứng viên đều nằm dưới
+        # ngưỡng đó, tức là đọc thừa nguyên một lượt toàn bộ dữ liệu.
+        # Kết luận không hề nới lỏng: vẫn là đối chiếu SHA256 toàn tệp.
+        $needFull = @{}
         foreach ($pr in $pairs) {
-            $done++
-            if ($done % 25 -eq 0) {
-                Write-Progress -Activity 'Xác minh toàn tệp' `
-                               -Status ("{0:N0}/{1:N0} · xác nhận {2:N0}" -f $done, $pairs.Count, $dups.Count) `
-                               -PercentComplete (($done / $pairs.Count) * 100)
+            if ([string]$pr.Sig -like 'FULL:*') { continue }
+            $needFull[$pr.Cand.Path] = $true
+            $needFull[$pr.Keep] = $true
+        }
+        $full = Get-HashSet @($needFull.Keys) 'FULL' 'Xác minh toàn tệp'
+
+        foreach ($pr in $pairs) {
+            if ([string]$pr.Sig -like 'FULL:*') {
+                $dups.Add([pscustomobject]@{ Path = $pr.Cand.Path; Size = $pr.Cand.Size
+                                             Date = $pr.Cand.Date; Keeper = $pr.Keep })
+                continue
             }
-            try {
-                $ch = Get-Sha256Full $pr.Cand.Path $sha
-                if (-not $keepFull.ContainsKey($pr.Keep)) { $keepFull[$pr.Keep] = Get-Sha256Full $pr.Keep $sha }
-                if ($keepFull[$pr.Keep] -eq $ch) {
-                    $dups.Add([pscustomobject]@{ Path = $pr.Cand.Path; Size = $pr.Cand.Size
-                                                 Date = $pr.Cand.Date; Keeper = $pr.Keep })
-                } else { $fullReject++ }
-            } catch { $err++ }
+            $ch = $full[$pr.Cand.Path]; $kh = $full[$pr.Keep]
+            if ($null -eq $ch -or $null -eq $kh) { $err++; continue }
+            if ($ch -eq $kh) {
+                $dups.Add([pscustomobject]@{ Path = $pr.Cand.Path; Size = $pr.Cand.Size
+                                             Date = $pr.Cand.Date; Keeper = $pr.Keep })
+            } else { $fullReject++ }
         }
     } finally {
-        Write-Progress -Activity 'Xác minh toàn tệp' -Completed
-        $sha.Dispose(); $sw.Stop()
+        $sw.Stop()
     }
 
     $dupBytes = ($dups | Measure-Object Size -Sum).Sum

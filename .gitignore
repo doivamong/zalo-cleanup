@@ -1,0 +1,21 @@
+# Nhật ký dọn dẹp — chứa đường dẫn đầy đủ tới từng tệp trên máy bạn.
+# TUYỆT ĐỐI không đưa lên repo công khai.
+logs/
+*.log
+*.csv
+
+# Cấu hình sinh ra lúc chạy — chứa đường dẫn thư mục sao lưu của bạn.
+settings.json
+profiles.json
+
+# Chỉ mục bản sao lưu, nếu vô tình nằm trong thư mục công cụ.
+_zalocleanup_backup.json
+
+# Rác của Windows và trình soạn thảo
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.bak
+*.tmp
+*~

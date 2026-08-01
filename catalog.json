@@ -1,0 +1,158 @@
+﻿{
+  "_huongDan": "Danh mục cache hệ thống. Sửa tệp này để thêm bớt mà không đụng mã nguồn. Đường dẫn dùng biến môi trường kiểu %LOCALAPPDATA%. Dấu * được phép. verified=true nghĩa là đã kiểm chứng tận nơi trên một máy thật; false nghĩa là chỉ dựa vào tài liệu của ứng dụng. Xóa tệp này thì công cụ quay về danh mục dựng sẵn trong mã nguồn.",
+  "_truong": "Bắt buộc: name, paths. Tùy chọn: group (A|B|C), risk (XANH|VÀNG), verified (true|false), note, procs (mảng tên tiến trình), ageHours (số nguyên, chỉ xóa tệp cũ hơn ngần ấy giờ), warning. Mục sai định dạng sẽ được nêu tên lúc khởi động chứ không bị bỏ qua im lặng.",
+  "_warning": "Mục có trường warning sẽ KHÔNG được chọn bởi lệnh * hay chữ nhóm — phải gõ đúng số của nó. Dùng cho những thứ mang tiếng là cache nhưng thật ra dùng chung cho cả máy.",
+  "_nhom": { "A": "Cache công cụ lập trình", "B": "Bộ cài đặt thừa", "C": "Tệp tạm và trình duyệt" },
+  "entries": [
+    { "group": "A", "name": "pre-commit", "verified": true, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.cache\\pre-commit"], "procs": [],
+      "note": "Môi trường hook, tự dựng lại nhưng phải tải từ mạng" },
+
+    { "group": "A", "name": "npm", "verified": true, "risk": "VÀNG",
+      "paths": ["%LOCALAPPDATA%\\npm-cache"], "procs": ["node"],
+      "note": "Gói npm tải lại khi cài lại" },
+
+    { "group": "A", "name": "codex runtimes", "verified": true, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.cache\\codex-runtimes"], "procs": ["node"],
+      "note": "Runtime tải lại khi cần" },
+
+    { "group": "A", "name": "Playwright", "verified": true, "risk": "VÀNG",
+      "paths": ["%LOCALAPPDATA%\\ms-playwright"], "procs": ["node", "chrome"],
+      "note": "Trình duyệt test, tải lại bằng lệnh playwright install" },
+
+    { "group": "A", "name": "HuggingFace", "verified": true, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.cache\\huggingface"], "procs": ["python", "pythonw"],
+      "note": "Mô hình AI, tải lại có thể rất nặng mạng" },
+
+    { "group": "A", "name": "uv (Python)", "verified": true, "risk": "VÀNG",
+      "paths": ["%LOCALAPPDATA%\\uv\\cache"], "procs": ["python", "pythonw"],
+      "note": "Gói Python tải lại từ mạng" },
+
+    { "group": "A", "name": "Puppeteer", "verified": true, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.cache\\puppeteer"], "procs": ["node", "chrome"],
+      "note": "Chromium tải lại khi cần" },
+
+    { "group": "A", "name": "pip (Python)", "verified": true, "risk": "VÀNG",
+      "paths": ["%LOCALAPPDATA%\\pip\\Cache"], "procs": ["python", "pythonw"],
+      "note": "Gói Python tải lại từ mạng" },
+
+    { "group": "A", "name": "cargo registry (Rust)", "verified": true, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.cargo\\registry"], "procs": ["cargo", "rustc"],
+      "note": "Crate tải lại từ mạng. Không đụng .cargo\\bin và .rustup" },
+
+    { "group": "A", "name": "Yarn", "verified": false, "risk": "VÀNG",
+      "paths": ["%LOCALAPPDATA%\\Yarn\\Cache"], "procs": ["node"],
+      "note": "Gói Yarn tải lại từ mạng" },
+
+    { "group": "A", "name": "Gradle", "verified": false, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.gradle\\caches"], "procs": ["java"],
+      "note": "Cache build Gradle, dựng lại ở lần build sau",
+      "warning": "Lần build kế tiếp của MỌI dự án Java sẽ chậm hẳn và phải tải lại phụ thuộc" },
+
+    { "group": "A", "name": "NuGet", "verified": false, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.nuget\\packages"], "procs": ["dotnet", "devenv"],
+      "note": "Gói NuGet tải lại khi restore",
+      "warning": "Đây là kho gói dùng chung cho mọi solution .NET trên máy, không phải cache tạm" },
+
+    { "group": "A", "name": "Go module cache", "verified": false, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\go\\pkg\\mod\\cache\\download"], "procs": ["go"],
+      "note": "Gói Go tải lại. Tệp ở đây chỉ đọc nên công cụ tự gỡ thuộc tính",
+      "warning": "Dùng chung cho mọi dự án Go trên máy; build ngoại tuyến sẽ hỏng cho tới khi tải lại" },
+
+    { "group": "A", "name": "Composer (PHP)", "verified": false, "risk": "VÀNG",
+      "paths": ["%LOCALAPPDATA%\\Composer\\files"], "procs": ["php"],
+      "note": "Gói Composer tải lại từ mạng" },
+
+    { "group": "A", "name": "Maven", "verified": false, "risk": "VÀNG",
+      "paths": ["%USERPROFILE%\\.m2\\repository"], "procs": ["java"],
+      "note": "Kho Maven cục bộ, tải lại khi build. Có thể rất nặng mạng" },
+
+    { "group": "B", "name": "Ollama — bộ cài cũ", "verified": true, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\Ollama\\updates_v2"], "procs": ["ollama"],
+      "note": "Tệp cài đặt còn sót, không còn tác dụng" },
+
+    { "group": "B", "name": "LM Studio — bộ cài cũ", "verified": true, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\lm-studio-updater"], "procs": [],
+      "note": "Tệp cài đặt còn sót" },
+
+    { "group": "B", "name": "Intel Package Cache", "verified": true, "risk": "XANH",
+      "paths": ["%ProgramData%\\Intel Package Cache*"], "procs": [],
+      "note": "Bộ cài driver Intel đã dùng xong" },
+
+    { "group": "B", "name": "GIGABYTE đã tải", "verified": true, "risk": "XANH",
+      "paths": ["%ProgramFiles%\\GIGABYTE\\Control Center\\Lib\\Download"], "procs": [],
+      "note": "Bộ cài driver đã tải, không còn cần" },
+
+    { "group": "C", "name": "Tệp tạm của bạn", "verified": true, "risk": "XANH", "ageHours": 24,
+      "paths": ["%TEMP%"], "procs": [],
+      "note": "Chỉ tệp cũ hơn 24 giờ, để không phá ứng dụng đang mở" },
+
+    { "group": "C", "name": "Tệp tạm của Windows", "verified": true, "risk": "XANH", "ageHours": 24,
+      "paths": ["%WINDIR%\\Temp"], "procs": [],
+      "note": "Chỉ tệp cũ hơn 24 giờ" },
+
+    { "group": "C", "name": "Cache Chrome", "verified": true, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Cache"], "procs": ["chrome"],
+      "note": "Trang web tải lại khi truy cập" },
+
+    { "group": "C", "name": "Cache Edge", "verified": false, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Cache"], "procs": ["msedge"],
+      "note": "Trang web tải lại khi truy cập" },
+
+    { "group": "C", "name": "Cache Firefox", "verified": false, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\cache2"], "procs": ["firefox"],
+      "note": "Trang web tải lại khi truy cập" },
+
+    { "group": "C", "name": "Cache VS Code", "verified": false, "risk": "XANH",
+      "paths": ["%APPDATA%\\Code\\Cache", "%APPDATA%\\Code\\CachedData", "%APPDATA%\\Code\\Code Cache"],
+      "procs": ["Code"],
+      "note": "VS Code tự dựng lại khi khởi động" },
+
+    { "group": "C", "name": "Ảnh thu nhỏ", "verified": true, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer"], "procs": [],
+      "note": "Windows tự dựng lại" },
+
+    { "group": "C", "name": "INetCache", "verified": true, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\Microsoft\\Windows\\INetCache"], "procs": [],
+      "note": "Cache Internet cũ" },
+
+    { "group": "C", "name": "Báo cáo lỗi ứng dụng", "verified": true, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\CrashDumps"], "procs": [],
+      "note": "Crash dump" },
+
+    { "group": "C", "name": "Windows Error Reporting", "verified": false, "risk": "XANH",
+      "paths": ["%LOCALAPPDATA%\\Microsoft\\Windows\\WER\\ReportArchive", "%LOCALAPPDATA%\\Microsoft\\Windows\\WER\\ReportQueue"],
+      "procs": [],
+      "note": "Báo cáo lỗi đã gửi hoặc chờ gửi" },
+
+    { "group": "C", "name": "Windows Update đã tải", "verified": true, "risk": "XANH",
+      "paths": ["%WINDIR%\\SoftwareDistribution\\Download"], "procs": [],
+      "note": "Gói cập nhật đã cài xong" },
+
+    { "group": "C", "name": "Delivery Optimization", "verified": false, "risk": "XANH",
+      "paths": ["%WINDIR%\\SoftwareDistribution\\DeliveryOptimization"], "procs": [],
+      "note": "Bộ nhớ đệm chia sẻ cập nhật với máy khác" },
+
+    { "group": "C", "name": "Cache Microsoft Teams", "verified": false, "risk": "XANH",
+      "paths": ["%APPDATA%\\Microsoft\\Teams\\Cache", "%APPDATA%\\Microsoft\\Teams\\Code Cache"],
+      "procs": ["Teams", "ms-teams"],
+      "note": "Teams tự dựng lại khi mở" },
+
+    { "group": "C", "name": "Cache Discord", "verified": false, "risk": "XANH",
+      "paths": ["%APPDATA%\\discord\\Cache", "%APPDATA%\\discord\\Code Cache"], "procs": ["Discord"],
+      "note": "Discord tự dựng lại khi mở" }
+  ]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

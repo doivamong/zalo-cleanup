@@ -61,6 +61,32 @@ function New-TestFile($path, $bytes, $date) {
     (Get-Item -LiteralPath $path).LastWriteTime = $date
 }
 
+# Vài phép thử phải tạm đụng vào tệp cấu hình THẬT cạnh script — catalog.json
+# và settings.json — rồi trả lại nguyên trạng. Cặp hàm này lo việc đó.
+#
+# Không dùng Get-Content -Raw rồi Set-Content để cất giữ: Set-Content luôn thêm
+# một dòng mới ở cuối, nên mỗi lần chạy test lại làm tệp phình thêm một dòng
+# trống. Với catalog.json — tệp có trong git — hậu quả là cây làm việc bẩn ra
+# sau mỗi lần chạy dù chẳng ai sửa gì, và lập trình viên đi tìm nguyên nhân
+# của một thay đổi không ai tạo ra.
+#
+# Đọc và ghi thẳng byte thì không phải đoán bảng mã, không đụng tới BOM, và
+# tệp trả lại giống hệt tệp lấy đi.
+function Backup-RealFile($path) {
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    # Dấu phẩy đầu dòng để PowerShell trả về nguyên mảng byte thay vì rải nó
+    # ra thành từng phần tử rời — thiếu nó thì WriteAllBytes không nhận.
+    return ,[IO.File]::ReadAllBytes($path)
+}
+
+function Restore-RealFile($path, $bytes) {
+    if ($null -eq $bytes) {
+        Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        return
+    }
+    [IO.File]::WriteAllBytes($path, $bytes)
+}
+
 # Dọn sandbox. Phải gỡ junction TRƯỚC, đúng bài học của chính công cụ:
 # Remove-Item -Recurse gặp reparse point thì hỏng, và -ErrorAction SilentlyContinue
 # nuốt mất lỗi — hậu quả là sandbox ở lại %TEMP% kèm tệp sparse 900 GB.
@@ -588,19 +614,26 @@ Assert 'Công cụ chạy đúng dưới vùng miền vi-VN' ((Get-ReportedCount
     ("Công cụ báo " + (Get-ReportedCount $oCul 'Đã xóa') + " tệp")
 Assert 'Sandbox rỗng sau khi chạy dưới vi-VN' (@(Get-ChildItem $rCul -Recurse -File -Force -EA SilentlyContinue).Count -eq 0) 'Còn sót tệp'
 
-# P7 hỏng tệp thì quay về danh mục dựng sẵn
-$catBak = Get-Content $script:CatalogFile -Raw -Encoding UTF8
-'{ khong phai json hop le' | Set-Content $script:CatalogFile -Encoding UTF8
-$catFallback = Get-CatalogDefs
-Assert 'catalog.json hỏng thì quay về danh mục dựng sẵn' ($catFallback.Count -eq $catBuiltin.Count) `
-    ("Nhận được " + $catFallback.Count + " mục")
-$catBak | Set-Content $script:CatalogFile -Encoding UTF8
+# P7 hỏng tệp thì quay về danh mục dựng sẵn.
+# Phép thử này cố tình làm hỏng catalog.json thật, nên phải trả lại bằng
+# finally: đứt gánh giữa chừng mà không trả thì người dùng ở lại với một
+# catalog.json hỏng do chính bộ test gây ra.
+$catBak = Backup-RealFile $script:CatalogFile
+try {
+    [IO.File]::WriteAllText($script:CatalogFile, '{ khong phai json hop le',
+                            (New-Object Text.UTF8Encoding $true))
+    $catFallback = Get-CatalogDefs
+    Assert 'catalog.json hỏng thì quay về danh mục dựng sẵn' ($catFallback.Count -eq $catBuiltin.Count) `
+        ("Nhận được " + $catFallback.Count + " mục")
+} finally {
+    Restore-RealFile $script:CatalogFile $catBak
+}
 
 # ---------------------------------------------------------------- khôi phục tự tìm
 Write-Host ''
 Write-Host '── Khôi phục tự tìm bản sao lưu và mô tả nội dung' -ForegroundColor Yellow
 $setFile0 = Join-Path $PSScriptRoot 'settings.json'
-$setBak0 = if (Test-Path $setFile0) { Get-Content $setFile0 -Raw } else { $null }
+$setBak0 = Backup-RealFile $setFile0
 
 $bkParent = Join-Path $sbRoot 'kholuu'
 $bkSet = Join-Path $bkParent '20260801_090000'
@@ -625,13 +658,13 @@ Assert 'Hiện nơi bản sao lưu đang nằm' ($o -match 'Nằm ở\s+:') 'Thi
 $o = Invoke-Tool $rTarget @('3', 'x 1', '', '', '0')
 Assert 'Xem được danh sách tệp lớn nhất bên trong' ($o -match 'Ba tệp lớn nhất') 'Không xem được chi tiết'
 
-if ($null -ne $setBak0) { $setBak0 | Set-Content $setFile0 -Encoding UTF8 } else { Remove-Item $setFile0 -Force -EA SilentlyContinue }
+Restore-RealFile $setFile0 $setBak0
 
 # ---------------------------------------------------------------- chính sách sao lưu
 Write-Host ''
 Write-Host '── Chính sách sao lưu: sao lưu là tùy chọn' -ForegroundColor Yellow
 $setFile = Join-Path $PSScriptRoot 'settings.json'
-$setBak = if (Test-Path $setFile) { Get-Content $setFile -Raw } else { $null }
+$setBak = Backup-RealFile $setFile
 
 function New-PolicySandbox($name) {
     $p = New-Sandbox $name
@@ -662,7 +695,7 @@ $o = Invoke-Tool $rp4 @('9', '7', '', 'X', 'XÓA', '', '', '0')
 Assert 'KHONG không hỏi về sao lưu' (-not ($o -match 'chưa được sao lưu')) 'Vẫn hỏi'
 Assert 'KHONG xóa thẳng sau khi gõ XÓA' (@(Get-ChildItem $rp4 -Recurse -File -Force -EA SilentlyContinue).Count -eq 0) 'Không xóa được'
 
-if ($null -ne $setBak) { $setBak | Set-Content $setFile -Encoding UTF8 } else { Remove-Item $setFile -Force -EA SilentlyContinue }
+Restore-RealFile $setFile $setBak
 
 # ---------------------------------------------------------------- phép thử chậm
 if ($Full) {

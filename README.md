@@ -6,6 +6,8 @@
 
 *Một tệp PowerShell. Không cài đặt, không phụ thuộc, không chạy nền. Xem trước rồi mới xóa, sao lưu có xác minh, và nói thật với bạn về việc dung lượng có thực sự quay về hay không.*
 
+<img src="docs/img/01-man-hinh-chinh.png" alt="Màn hình chính của công cụ" width="720">
+
 [![Version](https://img.shields.io/badge/version-5.0-CC2929?style=for-the-badge)](https://github.com/doivamong/zalo-cleanup)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1-5391FE?style=for-the-badge&logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#-cài-đặt-60-giây)
@@ -130,23 +132,9 @@ Rồi bấm đúp `ZaloCleanup.cmd`.
 
 ### Kết quả thành công
 
-```
-  ╔══════════════════════════════════════════════════════════╗
-  ║   DỌN DẸP ZALO — chỉ chạy khi bạn mở công cụ             ║
-  ╚══════════════════════════════════════════════════════════╝
+Công cụ đo dung lượng ổ đĩa và thư mục Zalo, rồi hỏi bạn muốn làm gì. Không có bước cấu hình nào.
 
-   Ổ C còn trống    62.41 GB
-   Thư mục Zalo     28.70 GB
-
-   Bạn muốn làm gì?
-
-    1   Lấy lại dung lượng ổ đĩa
-    2   Xem máy đang chiếm bao nhiêu
-    3   Khôi phục dữ liệu đã sao lưu
-
-    9   Tùy chọn nâng cao
-    0   Thoát
-```
+<img src="docs/img/01-man-hinh-chinh.png" alt="Màn hình chính" width="720">
 
 <details>
 <summary><b>⚙️ Chạy trực tiếp tệp <code>.ps1</code> · SmartScreen · Chép sang máy khác</b></summary>
@@ -194,6 +182,10 @@ Chọn **`2`** — chỉ đọc và báo cáo, **không đụng vào bất cứ 
 
 Chọn **`1`** → **`2` — Bản trùng lặp trong Zalo**. Đây là lựa chọn an toàn nhất, và với nhiều người riêng bước này đã lấy lại hơn 10 GB.
 
+<img src="docs/img/02-bon-nguon.png" alt="Bốn nguồn dung lượng" width="720">
+
+*Lựa chọn an toàn nhất được tô xanh sẵn để bạn khỏi phải đoán.*
+
 <details>
 <summary><b>🟢 Bản trùng lặp — vì sao xóa được mà không mất ảnh</b></summary>
 
@@ -221,16 +213,13 @@ Bước 4 không thừa. Trong một lần chạy thực tế, **11 ứng viên 
 
 <br>
 
-Công cụ đo sẵn từng mốc rồi mới hỏi bạn:
+Công cụ đo sẵn từng mốc rồi mới hỏi bạn — bạn thấy con số trước khi chọn, không phải chọn rồi mới biết.
 
-```
-   1  Trước 01/01/2026        →   18.42 GB  (74,203 tệp)
-   2  Cũ hơn 6 tháng          →   24.10 GB  (98,551 tệp)
-   3  Cũ hơn 12 tháng         →   12.88 GB  (51,207 tệp)
-   4  Tôi tự nhập ngày
-```
+<img src="docs/img/03-moc-thoi-gian.png" alt="Mốc thời gian kèm dung lượng đo được" width="720">
 
-Mốc nào không có dữ liệu sẽ tự ẩn. Đây là **dữ liệu thật** — ảnh và video quá hạn lưu trên máy chủ Zalo sẽ mất vĩnh viễn, nên bước xác nhận ở đây nặng nhất: phải gõ đúng chữ `XÓA`.
+Mốc nào không còn dữ liệu sẽ **tự ẩn kèm lời giải thích**, thay vì hiện một lựa chọn 0 byte vô nghĩa. Ảnh trên là máy đã dọn sạch phần cũ nên chỉ còn một mốc.
+
+Đây là **dữ liệu thật** — ảnh và video quá hạn lưu trên máy chủ Zalo sẽ mất vĩnh viễn, nên bước xác nhận ở đây nặng nhất: phải gõ đúng chữ `XÓA`.
 
 </details>
 
@@ -249,16 +238,9 @@ Chế độ duy nhất hoạt động ngoài phạm vi Zalo. Nó chạy trên m�
 
 > **Công cụ không bao giờ dò tìm theo mẫu tên** kiểu `*cache*`. Rất nhiều ứng dụng đặt tên thư mục là `Cache` nhưng bên trong là dữ liệu thật không tái tạo được; quét theo mẫu tên chính là cách làm hỏng máy.
 
-```
-  ── A Cache công cụ lập trình
-   [x]  1. pre-commit                664.2 MB   26,803 tệp
-           Môi trường hook, tự dựng lại nhưng phải tải từ mạng
-   [x]  2. npm                       219.6 MB    6,681 tệp  · đang chạy: node
-           Gói npm tải lại khi cài lại
-   [ ]  3. NuGet                       1.8 GB   12,004 tệp  · chưa kiểm chứng tận nơi  · có cảnh báo
-           Gói NuGet tải lại khi restore
-           ! Đây là kho gói dùng chung cho mọi solution .NET trên máy, không phải cache tạm
-```
+<img src="docs/img/04-cache-he-thong.png" alt="Màn hình chọn cache hệ thống" width="860">
+
+Mỗi mục hiện dung lượng đo trực tiếp, số tệp, mô tả mất gì khi xóa, và các nhãn cảnh báo: `đang chạy: node` khi có tiến trình đang dùng, `chỉ tệp cũ hơn 24 giờ` khi mục có ngưỡng tuổi, `cần quyền quản trị` khi thiếu quyền ghi. Mục màu vàng là loại phải tải lại từ mạng. Mục nào không tồn tại trên máy sẽ tự ẩn.
 
 **Cách chọn:** gõ số, chữ nhóm, hoặc trộn cả hai — ví dụ `A,12,15`. Gõ `-` bỏ chọn hết, `*` chọn tất cả, `ok` để quét, `admin` để mở lại với quyền quản trị. Nhập sai thì giữ nguyên lựa chọn.
 

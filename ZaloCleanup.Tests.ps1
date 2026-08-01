@@ -61,6 +61,30 @@ function New-TestFile($path, $bytes, $date) {
     (Get-Item -LiteralPath $path).LastWriteTime = $date
 }
 
+# Dọn sandbox. Phải gỡ junction TRƯỚC, đúng bài học của chính công cụ:
+# Remove-Item -Recurse gặp reparse point thì hỏng, và -ErrorAction SilentlyContinue
+# nuốt mất lỗi — hậu quả là sandbox ở lại %TEMP% kèm tệp sparse 900 GB.
+function Remove-Sandbox($path) {
+    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path)) { return }
+    Get-ChildItem $path -Recurse -Directory -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint } |
+        Sort-Object { $_.FullName.Length } -Descending |
+        ForEach-Object { try { [IO.Directory]::Delete($_.FullName, $false) } catch { } }
+    try { Remove-Item $path -Recurse -Force -ErrorAction Stop } catch { }
+    if (Test-Path -LiteralPath $path) {
+        Write-Host ("  CẢNH BÁO: không dọn sạch được sandbox " + $path) -ForegroundColor Red
+        Write-Host  '  Hãy xóa thủ công — trong đó có tệp sparse rất lớn.' -ForegroundColor Red
+    }
+}
+
+# Lần chạy trước bị ngắt giữa chừng thì sandbox ở lại. Quét dọn trước khi bắt đầu.
+$stale = @(Get-ChildItem $env:TEMP -Directory -Filter 'zct_*' -ErrorAction SilentlyContinue |
+           Where-Object { $_.LastWriteTime -lt (Get-Date).AddMinutes(-10) })
+if ($stale.Count -gt 0) {
+    Write-Host ("  Dọn {0} sandbox còn sót từ lần chạy trước..." -f $stale.Count) -ForegroundColor DarkGray
+    $stale | ForEach-Object { Remove-Sandbox $_.FullName }
+}
+
 Write-Host ''
 Write-Host '════════════════════════════════════════════════════════════════' -ForegroundColor Cyan
 Write-Host '  BỘ TEST HỒI QUY — Dọn dẹp Zalo' -ForegroundColor Cyan
@@ -683,7 +707,7 @@ Write-Host ("  ĐẠT: {0}    HỎNG: {1}" -f $script:Pass, $script:Fail) -Foreg
 if (-not $Full) { Write-Host '  (Chạy lại với -Full để thêm các phép thử chậm)' -ForegroundColor DarkGray }
 Write-Host '════════════════════════════════════════════════════════════════' -ForegroundColor Cyan
 
-try { Remove-Item $sbRoot -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+Remove-Sandbox $sbRoot
 Get-ChildItem $logDir -File -ErrorAction SilentlyContinue |
     Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-30) } |
     Remove-Item -Force -ErrorAction SilentlyContinue

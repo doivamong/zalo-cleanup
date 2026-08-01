@@ -13,5 +13,7 @@ license.workspace = true
 # accesskit. Đo được: lõi 36 crate, cộng giao diện thành 112 — nghĩa là 76 crate
 # chỉ để vẽ cửa sổ, và chúng không được dính vào phần quyết định xóa gì.
 [dependencies]
+# Chuẩn hóa Unicode để bỏ dấu thanh. std không có. Kéo theo tinyvec, tổng 3 crate.
+unicode-normalization = "0.1"
 
 [dev-dependencies]

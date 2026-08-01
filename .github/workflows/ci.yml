@@ -88,8 +88,15 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Kiểm thử lõi
-        run: cargo test --workspace
+      # Bao gồm CỔNG M1 — bộ đối chiếu song song với bản PowerShell. Nó bóc thẳng
+      # hàm ra khỏi ZaloCleanup.ps1 bằng AST rồi so từng câu trả lời một.
+      #
+      # Máy chủ không có dữ liệu Zalo thật nên nó chỉ chạy phần ca dựng máy móc,
+      # và TỰ IN RA dòng CHÚ Ý nói rõ đã bỏ qua phần nào — dùng --nocapture để
+      # dòng đó hiện lên nhật ký chứ không im lặng báo xanh. Phần đầy đủ 57.572
+      # đầu vào chỉ chạy được trên máy có dữ liệu.
+      - name: Kiểm thử lõi và đối chiếu song song với bản PowerShell
+        run: cargo test --workspace -- --nocapture
 
       # CỔNG M0. Đây là lý do CI tồn tại từ mốc này chứ không phải mốc sau.
       - name: Cổng kiến trúc M0 — lõi không được dính giao diện

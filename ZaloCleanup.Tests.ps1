@@ -782,6 +782,36 @@ Assert 'KHONG xóa thẳng sau khi gõ XÓA' (@(Get-ChildItem $rp4 -Recurse -Fil
 
 Restore-RealFile $setFile $setBak
 
+# ---------------------------------------------------------------- xác minh SHA256 toàn bộ
+# Mức xác minh 2 chưa từng có phép thử nào chạm tới, và đó đúng là mức duy nhất
+# bị hỏng: trong PowerShell 5.1, toán tử @() áp lên List[object] ném "Argument
+# types do not match". Mức mặc định thoát nạn vì Get-Random đã trả ra mảng thật.
+# Nghĩa là người dùng chọn mức chắc chắn nhất lại là người duy nhất gặp lỗi.
+Write-Host ''
+Write-Host '── Sao lưu với xác minh SHA256 toàn bộ' -ForegroundColor Yellow
+$rFV = New-Sandbox 'fullverify'
+$rndFV = New-Object Random 7
+1..60 | ForEach-Object {
+    $b = New-Object byte[] (500 + $_)
+    $rndFV.NextBytes($b)
+    New-TestFile (Join-Path $rFV ("video\fv$_")) $b $old
+}
+$dFV = Join-Path $sbRoot 'khoFV'
+# 9 nâng cao · 7 quét · X xóa · 1 sao lưu trước · đường dẫn · 2 SHA256 toàn bộ · XÓA
+$oFV = Invoke-Tool $rFV @('9', '7', '', 'X', '1', $dFV, '2', 'XÓA', '', '', '0')
+
+Assert 'Xác minh toàn bộ không ném lỗi kiểu dữ liệu' `
+    (-not ($oFV -match 'Argument types do not match')) `
+    'Bẫy @() trên List[object] đã quay lại'
+Assert 'Xác minh toàn bộ rồi vẫn xóa được đủ 60 tệp' ((Get-ReportedCount $oFV 'Đã xóa') -eq 60) `
+    ("Công cụ báo " + (Get-ReportedCount $oFV 'Đã xóa') + " tệp")
+Assert 'Nguồn rỗng sau khi sao lưu và xóa' `
+    (@(Get-ChildItem $rFV -Recurse -File -Force -EA SilentlyContinue).Count -eq 0) 'Còn sót tệp ở nguồn'
+Assert 'Bản sao lưu giữ đủ 60 tệp' `
+    (@(Get-ChildItem $dFV -Recurse -File -Force -EA SilentlyContinue |
+       Where-Object { $_.Name -ne '_zalocleanup_backup.json' }).Count -eq 60) `
+    'Thiếu tệp trong bản sao lưu'
+
 # ---------------------------------------------------------------- phép thử chậm
 if ($Full) {
     Write-Host ''

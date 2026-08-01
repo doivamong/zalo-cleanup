@@ -505,11 +505,40 @@ function Remove-EmptyDirs($roots, $preserveTopLevel) {
     return $removed
 }
 
+# Duyệt cây thư mục bằng .NET thay vì Get-ChildItem -Recurse. Đo trên 56.914
+# tệp thật: 3,40 giây xuống 1,12 giây. Phần lớn chỗ tiết kiệm là do không phải
+# dựng đối tượng bọc của PowerShell cho từng tệp.
+#
+# Hai tính chất của bản cũ BẮT BUỘC phải giữ, vì mất một trong hai là hỏng:
+#
+#   1. Đếm được lỗi truy cập chứ không nuốt. Bản cũ đếm bằng -ErrorVariable;
+#      ở đây bắt lỗi theo từng thư mục, lại còn đúng chỗ hơn.
+#
+#   2. KHÔNG đi xuyên reparse point. Đã đo tận nơi: Get-ChildItem -Recurse của
+#      PowerShell 5.1 không đi xuyên junction. EnumerateDirectories thì CÓ, nên
+#      phải tự chặn. Đi xuyên là mở đường cho một lệnh xóa lan sang thư mục ở
+#      đầu bên kia của junction — đúng thứ mà Remove-EmptyDirs đã phải đề phòng.
+#
+# Duyệt bằng ngăn xếp chứ không đệ quy: cây sâu bất thường thì đệ quy tràn ngăn
+# xếp, mà tràn ở giữa một lượt quét thì người dùng nhận được danh sách cụt.
 function Get-FilesSafe($path) {
-    $ev = $null
-    $items = Get-ChildItem -LiteralPath $path -Recurse -File -Force -ErrorAction SilentlyContinue -ErrorVariable ev
-    $script:LastScanErrors += @($ev).Count
-    return $items
+    $out   = New-Object 'Collections.Generic.List[IO.FileInfo]'
+    $stack = New-Object 'Collections.Generic.Stack[IO.DirectoryInfo]'
+    try { $stack.Push((New-Object IO.DirectoryInfo $path)) }
+    catch { $script:LastScanErrors++; return $out }
+
+    while ($stack.Count -gt 0) {
+        $d = $stack.Pop()
+        try { foreach ($f in $d.EnumerateFiles()) { $out.Add($f) } }
+        catch { $script:LastScanErrors++ }
+        try {
+            foreach ($s in $d.EnumerateDirectories()) {
+                if ($s.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+                $stack.Push($s)
+            }
+        } catch { $script:LastScanErrors++ }
+    }
+    return $out
 }
 
 function Show-ScanErrors {
@@ -653,14 +682,20 @@ function Invoke-Scan([switch]$Quiet) {
     $script:LastScanErrors = 0
     $sw = [Diagnostics.Stopwatch]::StartNew()
 
+    # foreach chứ không ForEach-Object: đường ống của PowerShell tốn thêm một
+    # nhịp cho mỗi tệp, đo được 0,60 giây trên 56.914 tệp.
+    # LƯU Ý cho người sửa sau: trong ForEach-Object thì `return` nghĩa là bỏ qua
+    # phần tử này, còn trong foreach thì `return` THOÁT HẲN khỏi hàm. Đổi vòng
+    # lặp mà quên đổi `return` thành `continue` là lượt quét dừng ở tệp đầu tiên
+    # bị loại, và người dùng nhận một danh sách cụt mà không hay biết.
     foreach ($dir in $scanDirs) {
-        Get-FilesSafe $dir | ForEach-Object {
-            if (Test-Protected $_.FullName) { $blocked++; return }
-            $t = $_.LastWriteTime
-            if ($t -lt $lo -or $t -gt $hi) { return }
-            if ($_.Length -lt $minBytes) { return }
-            if (-not (Test-PassFilter $_)) { return }
-            $hits.Add([pscustomobject]@{ Path = $_.FullName; Size = $_.Length; Date = $t; Keeper = '' })
+        foreach ($f in (Get-FilesSafe $dir)) {
+            if (Test-Protected $f.FullName) { $blocked++; continue }
+            $t = $f.LastWriteTime
+            if ($t -lt $lo -or $t -gt $hi) { continue }
+            if ($f.Length -lt $minBytes) { continue }
+            if (-not (Test-PassFilter $f)) { continue }
+            $hits.Add([pscustomobject]@{ Path = $f.FullName; Size = $f.Length; Date = $t; Keeper = '' })
         }
     }
     $sw.Stop()
@@ -1511,6 +1546,9 @@ function Invoke-Backup {
     $ok = 0; $fail = 0; $i = 0
     $copied = New-Object Collections.Generic.List[object]
     $failLog = New-Object Collections.Generic.List[string]
+    # Nhớ thư mục đã tạo để khỏi hỏi đĩa lại cho từng tệp. Sao lưu Zalo thường
+    # đổ hàng vạn tệp vào vài trăm thư mục nên gần như lần nào cũng trúng.
+    $madeDirs = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 
     foreach ($f in $script:Scan) {
         $i++
@@ -1520,10 +1558,24 @@ function Invoke-Backup {
         }
         try {
             $rel = Get-RelPath $f.Path $base
-            $target = Join-Path $destRun $rel
-            $dir = Split-Path $target -Parent
-            if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-            Copy-Item -LiteralPath $f.Path -Destination $target -Force -ErrorAction Stop
+
+            # Get-RelPath trả về NGUYÊN đường dẫn tuyệt đối khi tệp không nằm
+            # dưới $base. Ghép kiểu .NET với một đường dẫn tuyệt đối thì phần gốc
+            # bị vứt đi và kết quả là chính đường dẫn tuyệt đối đó — bản sao lưu
+            # sẽ ghi ra NGOÀI thư mục sao lưu, tệ nhất là đè lên chính tệp nguồn.
+            # Bản cũ thoát nạn một cách tình cờ, nhờ Join-Path dựng ra đường dẫn
+            # hỏng rồi mới ném lỗi. Ở đây chặn thẳng và nói rõ lý do.
+            if ([IO.Path]::IsPathRooted($rel)) { throw 'tệp không nằm dưới gốc quét' }
+
+            $target = $destRun + '\' + $rel
+            $dir = [IO.Path]::GetDirectoryName($target)
+            if (-not $madeDirs.Contains($dir)) {
+                # Chỉ ghi nhớ sau khi tạo được thật, để một lần tạo hỏng không
+                # làm mọi tệp sau đó tưởng nhầm là thư mục đã có.
+                [void][IO.Directory]::CreateDirectory($dir)
+                [void]$madeDirs.Add($dir)
+            }
+            [IO.File]::Copy($f.Path, $target, $true)
             $ok++
             $copied.Add([pscustomobject]@{ Src = $f.Path; Dst = $target; Rel = $rel; Size = $f.Size })
         } catch {
@@ -1540,18 +1592,27 @@ function Invoke-Backup {
     try {
         foreach ($c in $copied) {
             if (-not [IO.File]::Exists($c.Dst)) { $vFail++; $failLog.Add($c.Dst + ' => thiếu ở đích'); continue }
-            if ((New-Object IO.FileInfo $c.Dst).Length -ne $c.Size) {
+            if ([IO.FileInfo]::new($c.Dst).Length -ne $c.Size) {
                 $vFail++; $failLog.Add($c.Dst + ' => lệch kích thước'); continue
             }
         }
-        $sample = $copied
-        if (-not $fullVerify) { $sample = $copied | Get-Random -Count ([Math]::Min(50, $copied.Count)) }
+        # $copied là List[object]. Trong PowerShell 5.1, toán tử @() áp lên
+        # List[object] ném "Argument types do not match"; chỉ .Count gọi thẳng
+        # mới chạy. Bẫy này từng làm hỏng nguyên nhánh xác minh SHA256 toàn bộ:
+        # ai chọn mức chắc chắn nhất thì lại rơi đúng vào mức duy nhất bị lỗi,
+        # còn mức mặc định thì thoát vì Get-Random đã trả ra mảng thật.
+        # Nên đổi sang mảng bằng ToArray() rồi mới dùng, và đếm đúng một lần.
+        $sample = $copied.ToArray()
+        if (-not $fullVerify -and $sample.Count -gt 50) {
+            $sample = @($sample | Get-Random -Count 50)
+        }
+        $sampleN = $sample.Count
         $j = 0
         foreach ($c in $sample) {
             $j++
             if ($j % 20 -eq 0) {
-                Write-Progress -Activity 'Xác minh' -Status ("{0:N0}/{1:N0}" -f $j, @($sample).Count) `
-                               -PercentComplete (($j / @($sample).Count) * 100)
+                Write-Progress -Activity 'Xác minh' -Status ("{0:N0}/{1:N0}" -f $j, $sampleN) `
+                               -PercentComplete (($j / $sampleN) * 100)
             }
             try {
                 if ((Get-Sha256Full $c.Src $sha) -ne (Get-Sha256Full $c.Dst $sha)) {
@@ -1973,11 +2034,22 @@ function Invoke-Delete {
             if (Test-Protected $f.Path) { $guarded++; $w.WriteLine("VÙNGBẢOVỆ`t0`t" + $f.Path); continue }
             # Đường dẫn dài cần tiền tố đặc biệt khi Windows tắt hỗ trợ long path
             $lp = Get-LongPath $f.Path
-            if (-not [IO.File]::Exists($lp)) { $missing++; $w.WriteLine("BIẾNMẤT`t0`t" + $f.Path); continue }
+
+            # Một đối tượng FileInfo thay cho File::Exists cộng New-Object.
+            # FileInfo đọc metadata một lần rồi nhớ lại nên bớt được một lượt hỏi
+            # đĩa cho mỗi tệp, và ::new() không đi qua tầng cmdlet như New-Object.
+            # Đo trên 20.000 tệp: 0,69 ms xuống 0,39 ms mỗi tệp.
+            # Dựng trong try vì đường dẫn dị dạng làm hàm dựng ném lỗi, mà bản cũ
+            # gặp ca đó thì rơi vào nhánh BIẾNMẤT — giữ nguyên kết cục ấy.
+            $fi = $null
+            try { $fi = [IO.FileInfo]::new($lp) } catch { }
+            if ($null -eq $fi -or -not $fi.Exists) { $missing++; $w.WriteLine("BIẾNMẤT`t0`t" + $f.Path); continue }
 
             $actual = 0
             try {
-                $fi = New-Object IO.FileInfo $lp
+                # Đọc cỡ THẬT lúc này chứ không lấy cỡ ghi lúc quét: tệp có thể
+                # đã đổi giữa lúc quét và lúc xóa, mà con số này đi thẳng vào
+                # nhật ký và vào tổng dung lượng báo đã thu hồi.
                 $actual = $fi.Length
                 if ($fi.Attributes -band [IO.FileAttributes]::ReadOnly) {
                     $fi.Attributes = $fi.Attributes -bxor [IO.FileAttributes]::ReadOnly

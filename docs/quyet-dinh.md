@@ -3,6 +3,8 @@
 > Đầu vào: [`docs/ui-ux-council.md`](ui-ux-council.md) mục 9 · [`docs/rust-port-brief.md`](rust-port-brief.md)
 > Ngày: **01/08/2026** · Trạng thái mã nguồn tại thời điểm chốt: `e30e2ee`
 >
+> **Tình trạng: 10/12 đã quyết.** Hai câu còn lại là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**.
+>
 > **Cách đọc:** mục ✅ là đã quyết, có bằng chứng đo được ngay trong tài liệu này.
 > Mục ❓ là còn chờ chủ dự án, và ghi rõ nó đang chặn cái gì.
 > Ba chỗ tài liệu này **bác lại** kết luận của hội đồng đều được đánh dấu ⚠️ kèm số đo.
@@ -21,7 +23,7 @@
 | 6 | Ngưỡng tuổi kết quả quét | ✅ sửa chỗ khác ⚠️ |
 | 7 | Nút "Mở bản dòng lệnh" | ✅ có, sau khi có khóa |
 | 8 | Máy thiếu phông chữ | ✅ nhúng phông dự phòng ⚠️ |
-| 9① | Zalo có hiện lại ảnh sau khi xóa `resource\` | ❓ chỉ chủ dự án trả lời được |
+| 9① | Zalo có hiện lại ảnh sau khi xóa `resource\` | ✅ **có, hiện bình thường** |
 | 9② | Nguồn đọc tên/avatar ngoài vùng bảo vệ | ✅ **không có** |
 | 10 | Bộ giải mã JPEG XL | ✅ có ⚠️ tiền đề của hội đồng sai |
 | 11 | Hai bản dùng chung tệp cấu hình | ✅ chia ba cách |
@@ -145,6 +147,37 @@ Ngửi magic byte trên **400 mẫu ngẫu nhiên**:
 
 ---
 
+## ✅ Q9① — Ảnh vẫn hiện bình thường
+
+**Kiểm chứng thực nghiệm, 01/08/2026.** Sau khi xóa **15,05 GB bản trùng lặp** khỏi tài khoản `2068096368017928379`, chủ dự án mở lại hội thoại cũ trong Zalo: **ảnh vẫn hiện bình thường**, không có ô trống.
+
+**Mở khóa ba thứ đang bị chặn:**
+
+- Thẻ **🟢 Bản trùng lặp** giữ nhãn *an toàn nhất*.
+- Thứ tự bốn thẻ ở **QĐ-17** đứng nguyên, không phải xếp lại.
+- Dòng `→ Bắt đầu từ đây` được đặt trên thẻ Bản trùng lặp.
+
+### Quan sát này chứng minh tới đâu
+
+Cần nói rõ giới hạn, vì lời quảng cáo trong README dựa vào chỗ này.
+
+**Đã chứng minh:** xóa bản trong `resource\<mã hội thoại>\` không làm hội thoại thủng ảnh.
+
+**Chưa phân biệt được:** ảnh hiện lên là do Zalo đọc **bản gốc còn giữ lại** trong `video\`/`picture\`, hay do nó **tải lại từ máy chủ**. Nhìn bằng mắt thì hai trường hợp giống hệt nhau.
+
+Khác biệt này có hệ quả thật:
+
+| Nếu | Thì |
+|:---|:---|
+| Zalo đọc bản gốc còn giữ lại | Chế độ khử trùng lặp an toàn tuyệt đối, kể cả khi ngoại tuyến và kể cả với ảnh đã quá hạn lưu trên máy chủ |
+| Zalo tải lại từ máy chủ | Ảnh **quá hạn lưu trên máy chủ** sẽ thủng, và người dùng ngoại tuyến thấy ô trống — nhãn *an toàn nhất* phải nói thêm điều kiện |
+
+**Cách phân biệt, tốn 30 giây:** ngắt mạng, mở lại một hội thoại cũ đã bị dọn, cuộn tới ảnh cũ. Còn hiện thì là đọc bản gốc tại chỗ. Thành ô trống hoặc quay vòng tải thì là tải lại từ máy chủ.
+
+Việc này **chưa chặn thiết kế** — thứ tự thẻ đã chốt được rồi. Nhưng nếu kết quả là "tải lại từ máy chủ" thì câu quảng cáo *"không mất một tấm ảnh nào"* trong README phải được viết lại kèm điều kiện.
+
+---
+
 ## ✅ Q9② — Không có nguồn nào ngoài vùng bảo vệ
 
 Đã kiểm `config.json`, `zsafe-storage.json`, `Preferences` — **chỉ đọc tên khóa, không đọc giá trị**, vì đây là dữ liệu cá nhân.
@@ -210,18 +243,6 @@ Windows 10 đã hết hỗ trợ chính thức từ tháng 10/2025, nhưng vẫn
 **Câu thật sự cần bạn quyết:** có bỏ công **kiểm thử** cho nó không — màn hình 1366×768, ca thiếu phông, các bản LTSC gọn.
 
 **Đang chặn:** phạm vi kế hoạch kiểm thử, không chặn thiết kế.
-
----
-
-## ❓ Q9① — Zalo có hiện lại ảnh sau khi xóa `resource\` không · **chỉ chủ dự án trả lời được**
-
-Câu hỏi: sau khi xóa bản trùng lặp trong `resource\<mã hội thoại>\`, mở lại hội thoại cũ trong Zalo thì ảnh còn hiện không, hay thành ô trống?
-
-**Tôi không kiểm được** — phải mở Zalo và nhìn một hội thoại cũ bằng mắt.
-
-**Nhưng chủ dự án có sẵn câu trả lời thực nghiệm:** ngày 01/08/2026 đã xóa **15,05 GB bản trùng lặp** khỏi tài khoản `2068096368017928379`. Chỉ cần mở một hội thoại cũ và nhìn.
-
-**Đang chặn:** dòng `→ Bắt đầu từ đây` trên thẻ khuyến nghị đầu tiên của giao diện. Nếu ảnh **không** hiện lại thì thẻ "Bản trùng lặp" không còn được gắn nhãn an toàn nhất, và toàn bộ thứ tự bốn thẻ ở QĐ-17 phải xếp lại.
 
 ---
 

@@ -1990,6 +1990,26 @@ function Invoke-Restore {
 }
 
 # ================================================================ xóa
+# Bản giữ lại của một cặp trùng lặp còn sống và còn đúng cỡ hay không.
+#
+# Chuỗi rỗng nghĩa là kết quả quét này không phải chế độ khử trùng lặp, nên không
+# có ràng buộc nào — trả về $true để các chế độ khác đi qua.
+#
+# Chỉ so tồn tại và cỡ, KHÔNG băm lại: băm lại nghĩa là đọc trọn cả hai tệp cho
+# từng cặp, tức nhân đôi lượng đọc đĩa của cả lượt xóa. Lúc quét đã đối chiếu
+# SHA256 toàn tệp rồi; ở đây chỉ cần bắt được bản giữ lại đã biến mất hoặc đã đổi.
+#
+# Tách thành hàm riêng để phép thử gọi thẳng được. Khe hở giữa lúc quét và lúc xóa
+# không dựng lại được bằng bộ test đầu-cuối, vì nó bơm hết phím trong một lượt
+# chạy; để điều kiện nằm chìm trong Invoke-Delete thì nó không có phép thử nào canh.
+function Test-KeeperAlive($keeperPath, $expectedSize) {
+    if ([string]::IsNullOrEmpty($keeperPath)) { return $true }
+    $kfi = $null
+    try { $kfi = [IO.FileInfo]::new((Get-LongPath $keeperPath)) } catch { }
+    if ($null -eq $kfi -or -not $kfi.Exists) { return $false }
+    return ($kfi.Length -eq $expectedSize)
+}
+
 # Bản sao lưu chỉ được coi là SẠCH khi vừa không lỗi vừa TRỌN VẸN. Hai vế, không
 # phải một — và vế thứ hai mới là vế dễ mất.
 #
@@ -2111,7 +2131,7 @@ function Invoke-Delete {
     $w.WriteLine('# Cột: TRẠNGTHÁI<TAB>BYTES<TAB>ĐƯỜNGDẪN')
     $w.Flush()
 
-    $ok = 0; $fail = 0; $missing = 0; $guarded = 0; $trunc = 0; $freed = [long]0; $i = 0
+    $ok = 0; $fail = 0; $missing = 0; $guarded = 0; $trunc = 0; $freed = [long]0; $i = 0; $noKeeper = 0
     $errs = New-Object Collections.Generic.List[string]
     $completed = $false
     # Cắt cụt chỉ dành cho cache. Xem ghi chú ở Invoke-TruncateLocked.
@@ -2138,6 +2158,29 @@ function Invoke-Delete {
             $fi = $null
             try { $fi = [IO.FileInfo]::new($lp) } catch { }
             if ($null -eq $fi -or -not $fi.Exists) { $missing++; $w.WriteLine("BIẾNMẤT`t0`t" + $f.Path); continue }
+
+            # Khử trùng lặp: kiểm bản GIỮ LẠI còn sống ngay TRƯỚC khi xóa bản thừa.
+            #
+            # Vì sao phải kiểm lại dù lúc quét đã đối chiếu SHA256 toàn tệp: giữa lúc
+            # quét và lúc xóa có một khe hở — người dùng xóa hội thoại trong Zalo,
+            # hoặc Zalo tự dọn — mà kết quả quét được giữ tới hai giờ. Bản giữ lại
+            # biến mất trong khe đó thì tệp sắp bị xóa không còn là bản thừa nữa mà
+            # là bản DUY NHẤT.
+            #
+            # Chỗ này nặng hơn vẻ ngoài vì chế độ khử trùng lặp cố ý dùng xác nhận
+            # NHẸ, chỉ c/k chứ không bắt gõ XÓA. Mức xác nhận nhẹ ấy chỉ chính đáng
+            # nhờ tiền đề "bạn không mất gì, còn một bản giống hệt". Tiền đề sai thì
+            # phải dừng tay chứ không phải xóa tiếp.
+            #
+            # Chỉ so tồn tại và cỡ, KHÔNG băm lại: băm lại nghĩa là đọc trọn cả hai
+            # tệp cho từng cặp, tức nhân đôi lượng đọc đĩa của cả lượt xóa. Lúc quét
+            # đã đối chiếu SHA256 toàn tệp rồi; ở đây chỉ cần bắt được bản giữ lại
+            # đã biến mất hoặc đã đổi.
+            if (-not (Test-KeeperAlive $f.Keeper $f.Size)) {
+                $noKeeper++
+                $w.WriteLine("MẤTBẢNGỐC`t0`t" + $f.Path)
+                continue
+            }
 
             $actual = 0
             try {
@@ -2180,7 +2223,7 @@ function Invoke-Delete {
         Write-Progress -Activity 'Đang xóa' -Completed
         $sw.Stop()
         if (-not $completed) { $w.WriteLine('# Đã hủy giữa chừng lúc ' + (Get-Date).ToString('dd/MM/yyyy HH:mm:ss')) }
-        $w.WriteLine("# Tổng kết: đã xóa=$ok cắt cụt=$trunc thất bại=$fail biến mất=$missing vùng bảo vệ=$guarded bytes=$freed hoàn tất=$completed")
+        $w.WriteLine("# Tổng kết: đã xóa=$ok cắt cụt=$trunc thất bại=$fail biến mất=$missing vùng bảo vệ=$guarded mất bản gốc=$noKeeper bytes=$freed hoàn tất=$completed")
         $w.Flush(); $w.Dispose()
     }
 
@@ -2197,6 +2240,11 @@ function Invoke-Delete {
     Write-Host ('  Thời gian    : {0:N1} giây' -f $sw.Elapsed.TotalSeconds) -ForegroundColor DarkGray
     if ($missing -gt 0) { Write-Host ('  Biến mất trước khi xóa: {0:N0} tệp (tiến trình khác đã xóa)' -f $missing) -ForegroundColor Yellow }
     if ($guarded -gt 0) { Write-Host ('  Chặn bởi vùng bảo vệ  : {0:N0} tệp' -f $guarded) -ForegroundColor Yellow }
+    if ($noKeeper -gt 0) {
+        Write-Host ('  Giữ lại vì mất bản gốc: {0:N0} tệp' -f $noKeeper) -ForegroundColor Yellow
+        Write-Host  '  Bản gốc của những tệp đó đã biến mất hoặc đã đổi kể từ lúc quét,' -ForegroundColor Yellow
+        Write-Host  '  nên chúng không còn là bản thừa nữa. Quét lại để có kết quả đúng.' -ForegroundColor Yellow
+    }
     if ($trunc -gt 0) {
         Write-Host ('  Cắt cụt      : {0:N0} tệp đang bị khóa' -f $trunc) -ForegroundColor Yellow
         Write-Host  '                 Tên tệp còn đó nhưng nội dung đã rỗng, dung lượng đã được thu về.' -ForegroundColor DarkGray

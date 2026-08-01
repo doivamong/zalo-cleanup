@@ -242,6 +242,42 @@ Assert 'Dedup không đụng tệp cùng cỡ khác nội dung' (Test-Path (Join
 Assert 'Dedup không đụng tệp trong Cache' (Test-Path (Join-Path $r3 'resource\c1\Cache\ban_sao_trong_cache')) 'Xóa nhầm trong Cache'
 Assert 'Dedup chỉ cần xác nhận nhẹ' (-not ($o -match 'Gõ đúng chữ  XÓA')) 'Bắt gõ XÓA cho bản trùng lặp'
 
+# ---------------------------------------------------------------- mất bản gốc giữa chừng
+# Giữa lúc quét và lúc xóa có một khe hở: người dùng xóa hội thoại trong Zalo,
+# hoặc Zalo tự dọn. Bản giữ lại biến mất trong khe đó thì tệp sắp bị xóa không
+# còn là bản thừa nữa mà là bản DUY NHẤT.
+#
+# Nặng hơn vẻ ngoài vì chế độ này cố ý dùng xác nhận nhẹ c/k chứ không bắt gõ
+# XÓA, và mức nhẹ ấy chỉ chính đáng nhờ tiền đề "còn một bản giống hệt".
+#
+# Dựng khe hở bằng cách cho công cụ quét ở lần chạy thứ nhất, xóa bản gốc ở giữa
+# hai lần chạy, rồi ở lần chạy thứ hai mới quét lại và xóa. Lần quét thứ hai sẽ
+# không thấy cặp nào nữa — đó chính là hành vi đúng, và tệp trong resource\ phải
+# còn nguyên.
+Write-Host ''
+Write-Host '── Mất bản gốc giữa lúc quét và lúc xóa' -ForegroundColor Yellow
+$r3b = New-Sandbox 'dedupmatgoc'
+$bk1 = New-Object byte[] 300000; $rnd.NextBytes($bk1)
+New-TestFile (Join-Path $r3b 'video\goc_se_bien_mat') $bk1 $old
+New-TestFile (Join-Path $r3b 'resource\c1\video\ban_thua') $bk1 $old
+
+# Bản gốc còn: công cụ phải thấy đúng 1 bản trùng.
+$o3b = Invoke-Tool $r3b @('1', '2', 'c', 'k', 'k', 'k', '', '0', '0')
+Assert 'Còn bản gốc thì thấy đúng 1 bản trùng' ((Get-ReportedCount $o3b 'Bản trùng xác nhận') -eq 1) `
+    ("Công cụ báo " + (Get-ReportedCount $o3b 'Bản trùng xác nhận') + " bản trùng")
+Assert 'Lượt vừa rồi chưa xóa gì' `
+    (@(Get-ChildItem $r3b -Recurse -File -Force -EA SilentlyContinue).Count -eq 2) 'Đã xóa dù chọn hủy'
+
+# Bản gốc biến mất, rồi mới quét và xóa.
+Remove-Item -LiteralPath (Join-Path $r3b 'video\goc_se_bien_mat') -Force
+$o3c = Invoke-Tool $r3b @('1', '2', 'c', 'k', 'k', 'c', '', '0', '0')
+Assert 'Mất bản gốc thì không còn bản trùng nào' `
+    ((Get-ReportedCount $o3c 'Bản trùng xác nhận') -le 0 -or $o3c -match 'Không tìm thấy bản trùng') `
+    ("Công cụ vẫn báo " + (Get-ReportedCount $o3c 'Bản trùng xác nhận') + " bản trùng")
+Assert 'Tệp trong resource sống sót khi bản gốc đã mất' `
+    (Test-Path (Join-Path $r3b 'resource\c1\video\ban_thua')) `
+    'Đã xóa bản duy nhất còn lại'
+
 # ---------------------------------------------------------------- vùng bảo vệ
 Write-Host ''
 Write-Host '── G9: vùng bảo vệ Database và Partitions' -ForegroundColor Yellow
@@ -331,7 +367,7 @@ $errs2 = $null; $toks2 = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$toks2, [ref]$errs2)
 foreach ($fn in @('Get-RelPath', 'Test-Protected', 'Build-ProtectedIndex', 'Test-ProtectedRoot',
                   'Initialize-ProtectedAbs', 'Remove-ToneMarks', 'Test-ConfirmPhrase',
-                  'Test-BackupClean',
+                  'Test-BackupClean', 'Test-KeeperAlive',
                   'Test-IsReparsePoint', 'Remove-EmptyDirs', 'Invoke-TruncateLocked',
                   'Test-CatalogEntry', 'Get-CatalogDefs', 'Get-CatalogDefaults',
                   'Get-FreeBytes', 'Get-LongPath', 'Get-DriveLabel')) {
@@ -448,6 +484,66 @@ Assert 'Sao lưu dừng vì hết chỗ KHÔNG mở khóa bước xóa' `
     'Mở khóa xóa cho bản sao lưu dở dang'
 Assert 'Sao lưu thiếu tệp mà không báo lỗi vẫn bị chặn' `
     (-not [bool](Test-BackupClean (New-Bk @{ Ok = 99 }) 'S1')) 'Thiếu 1 tệp vẫn cho xóa'
+
+# ---------------------------------------------------------------- chốt bản giữ lại
+# Giữa lúc quét và lúc xóa có một khe hở: người dùng xóa hội thoại trong Zalo,
+# hoặc Zalo tự dọn, mà kết quả quét được giữ tới hai giờ. Bản giữ lại biến mất
+# trong khe đó thì tệp sắp bị xóa không còn là bản thừa nữa mà là bản DUY NHẤT.
+#
+# Nặng hơn vẻ ngoài vì chế độ khử trùng lặp cố ý dùng xác nhận NHẸ, chỉ c/k chứ
+# không bắt gõ XÓA, và mức nhẹ ấy chỉ chính đáng nhờ tiền đề "còn một bản giống
+# hệt". Tiền đề sai thì phải dừng tay.
+#
+# Khe hở này không dựng lại được bằng bộ test đầu-cuối vì nó bơm hết phím trong
+# một lượt chạy, nên chốt được tách thành hàm để gọi thẳng ở đây.
+Write-Host ''
+Write-Host '── Chốt bản giữ lại: mất bản gốc thì không được xóa bản thừa' -ForegroundColor Yellow
+$kaDir = Join-Path $sbRoot 'keeper'
+New-Item -ItemType Directory -Force $kaDir | Out-Null
+$kaGoc = Join-Path $kaDir 'goc'
+New-TestFile $kaGoc (New-Object byte[] 5000) $old
+$kaCut = Join-Path $kaDir 'goc_bi_cut'
+New-TestFile $kaCut (New-Object byte[] 4999) $old
+
+Assert 'Bản gốc còn và đúng cỡ thì cho xóa bản thừa' ([bool](Test-KeeperAlive $kaGoc 5000)) 'Chặn nhầm'
+Assert 'Bản gốc biến mất thì KHÔNG cho xóa' `
+    (-not [bool](Test-KeeperAlive (Join-Path $kaDir 'khong_ton_tai') 5000)) 'Vẫn cho xóa dù mất bản gốc'
+Assert 'Bản gốc đổi cỡ thì KHÔNG cho xóa' (-not [bool](Test-KeeperAlive $kaCut 5000)) `
+    'Vẫn cho xóa dù bản gốc đã đổi'
+Assert 'Chế độ không phải trùng lặp thì đi qua' ([bool](Test-KeeperAlive '' 5000)) `
+    'Chặn nhầm chế độ quét thường'
+Assert 'Đường dẫn dị dạng thì chặn chứ không ném lỗi' `
+    (-not [bool](Test-KeeperAlive "$kaDir`0bad" 5000)) 'Không chặn, hoặc đã ném lỗi'
+
+# ---------------------------------------------------------------- chốt đã nối dây chưa
+# Phép thử một hàm rời chỉ chứng minh HÀM đúng, không chứng minh nó ĐƯỢC GỌI.
+# Đã kiểm bằng đột biến: gỡ hẳn lời gọi Test-KeeperAlive ra khỏi Invoke-Delete
+# thì toàn bộ bộ test vẫn xanh. Tách lớp an toàn thành hàm cho dễ thử thì phải
+# canh luôn chỗ nối dây, nếu không là tự tay tạo ra một lỗ hổng câm.
+Write-Host ''
+Write-Host '── Các chốt an toàn đã được nối vào đúng chỗ' -ForegroundColor Yellow
+$astWire = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$null, [ref]$null)
+function Test-FnCallsFn($ast, $caller, $callee) {
+    $node = $ast.Find({ param($x)
+        $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $x.Name -eq $caller }, $true)
+    if ($null -eq $node) { return $false }
+    $hit = $node.Find({ param($y)
+        $y -is [System.Management.Automation.Language.CommandAst] -and $y.GetCommandName() -eq $callee }, $true)
+    return ($null -ne $hit)
+}
+Assert 'Vòng xóa có gọi chốt bản giữ lại' (Test-FnCallsFn $astWire 'Invoke-Delete' 'Test-KeeperAlive') `
+    'Test-KeeperAlive chưa được nối vào Invoke-Delete'
+Assert 'Vòng xóa có gọi chốt sao lưu sạch' (Test-FnCallsFn $astWire 'Invoke-Delete' 'Test-BackupClean') `
+    'Test-BackupClean chưa được nối vào Invoke-Delete'
+Assert 'Vòng xóa có kiểm vùng bảo vệ' (Test-FnCallsFn $astWire 'Invoke-Delete' 'Test-Protected') `
+    'Invoke-Delete không còn kiểm vùng bảo vệ'
+Assert 'Vòng quét có kiểm vùng bảo vệ' (Test-FnCallsFn $astWire 'Invoke-Scan' 'Test-Protected') `
+    'Invoke-Scan không còn kiểm vùng bảo vệ'
+$bkNode = $astWire.Find({ param($x)
+    $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $x.Name -eq 'Invoke-Backup' }, $true)
+Assert 'Vòng sao lưu vẫn chặn đường dẫn ra ngoài thư mục sao lưu' `
+    ($null -ne $bkNode -and $bkNode.Extent.Text -match 'IsPathRooted') `
+    'Mất chốt IsPathRooted — bản sao lưu có thể ghi ra ngoài thư mục đích'
 
 # ---------------------------------------------------------------- vùng bảo vệ: đối chiếu với bản đặc tả
 # Test-Protected chạy cho từng tệp trong mọi lượt quét nên đã được tăng tốc

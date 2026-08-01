@@ -193,16 +193,20 @@ Chọn **`1`** → **`2` — Bản trùng lặp trong Zalo**. Đây là lựa ch
 
 Zalo lưu mỗi tấm ảnh và mỗi video **hai bản**: một bản độc lập trong `video\ picture\ voice\ file\`, một bản trong `resource\<mã hội thoại>\`. Chế độ này tìm bản thừa bên `resource\` và **luôn giữ bản độc lập**.
 
-Quy trình bốn bước, chỉ bước cuối mới có quyền kết luận:
+Quy trình bốn bước, và **kết luận luôn là một phép so SHA-256 trên toàn bộ nội dung**:
 
-| # | Bước | Vai trò |
-|:-:|:---|:---|
-| 1 | Lập chỉ mục bản giữ lại theo kích thước | Thu hẹp không gian tìm kiếm |
-| 2 | Lọc ứng viên trùng kích thước | Loại nhanh phần lớn |
-| 3 | Chữ ký 64 KB đầu + 64 KB cuối | Loại tiếp mà chưa phải đọc cả tệp |
-| 4 | **SHA-256 toàn bộ nội dung** | **Chỉ bước này được kết luận** |
+| # | Bước | Vai trò | Đọc nội dung |
+|:-:|:---|:---|:---|
+| 1 | Lập chỉ mục bản giữ lại theo kích thước | Thu hẹp không gian tìm kiếm | Không, chỉ metadata |
+| 2 | Lọc ứng viên trùng kích thước | Loại nhanh phần lớn | Không, chỉ metadata |
+| 3 | Chữ ký 64 KB đầu + 64 KB cuối | Loại tiếp mà chưa phải đọc cả tệp | Một phần |
+| 4 | **SHA-256 toàn bộ nội dung** | **Chỉ bước này được kết luận** | Toàn bộ |
+
+Tệp **từ 128 KB trở xuống** thì bước 3 đã đọc trọn vẹn cả tệp rồi, nên chữ ký của nó *chính là* SHA-256 toàn tệp — bước 4 dùng lại chứ không mở tệp ra đọc lần nữa. Điều kiện để kết luận không hề nới lỏng: vẫn là đối chiếu SHA-256 toàn tệp, chỉ là thôi đọc thừa.
 
 Bước 4 không thừa. Trong một lần chạy thực tế, **11 ứng viên trùng kích thước đã bị loại ở bước băm** vì nội dung khác nhau. Nếu đoán theo tên hoặc kích thước, 11 tệp đó đã bị xóa oan.
+
+**Tốc độ.** Việc băm chia cho 8 luồng cùng đọc đĩa. Chỉ phép băm chạy song song — nó thuần tính toán; mọi khâu so sánh, loại bỏ và xóa vẫn nằm ở luồng chính để đọc mã còn kiểm được. Đo trên máy thật (i5-12400, SSD SATA): một luồng đọc được 41 MB/s, tám luồng 53 MB/s — nút cổ chai là ổ đĩa chứ không phải CPU, vì SHA-256 chạy tới 840 MB/s khi dữ liệu đã nằm trong bộ nhớ. Cộng với việc bỏ lượt đọc thừa ở bước 4, một lượt quét thử 13.000 tệp mô phỏng đúng hồ sơ dữ liệu thật giảm từ **7,1 giây xuống 1,0 giây**. Lần chạy đầu tiên, khi tệp chưa nằm trong bộ nhớ đệm, phần thắng còn khoảng **2,6 lần** — lúc đó tốc độ ổ đĩa mới là thứ quyết định.
 
 *Chế độ này bỏ qua bộ lọc thời gian.*
 
@@ -490,8 +494,8 @@ Ngoài ra có `khoiphuc_*.log`, `saoluu_loi_*.txt`, và `quet_*.csv`. Phím `L` 
 
 | Quy mô mã nguồn | |
 |:---|---:|
-| `ZaloCleanup.ps1` | 2.377 dòng · 78 hàm |
-| `ZaloCleanup.Tests.ps1` | 604 dòng · **149 phép thử** |
+| `ZaloCleanup.ps1` | 2.714 dòng · 79 hàm |
+| `ZaloCleanup.Tests.ps1` | 749 dòng · **149 phép thử** |
 | Mục trong `catalog.json` | 33 (20 đã kiểm chứng tận nơi) |
 | Luật vùng bảo vệ | 15 mức `tất cả` + 8 mức `gốc` |
 | Phụ thuộc ngoài | **0** |
@@ -558,7 +562,7 @@ Ngoài ra có `khoiphuc_*.log`, `saoluu_loi_*.txt`, và `quet_*.csv`. Phím `L` 
 
 Công cụ tự dò mọi tài khoản Zalo trên máy. Máy có nhiều tài khoản thì nó hỏi bạn chọn, và bạn đổi được bất cứ lúc nào bằng phím `T`.
 
-Hai bản của cùng một tấm ảnh khớp nhau bằng **đoạn hash cuối tên tệp** — đó là cơ sở của chế độ khử trùng lặp.
+Tên tệp ở hai nơi **không theo cùng một quy ước**: bản độc lập đặt bằng mã số trần (`7594809871497`), còn bản trong `resource\` đặt theo `<mã tin nhắn>_<mã tài khoản>_<mã hội thoại>_<hash>.jxl`. Vì vậy chế độ khử trùng lặp **không dựa vào tên tệp một chút nào** — nó ghép ứng viên theo kích thước rồi kết luận bằng SHA-256 toàn tệp.
 
 </details>
 

@@ -414,7 +414,7 @@ Công cụ so phần cần ghi với dung lượng trống **trước khi ghi by
 | `5` | **Loại trừ** — thư mục, đuôi tệp, và bật/tắt việc giữ tệp `.rescache` |
 | `6` | Hồ sơ bộ lọc — lưu và nạp lại bộ lọc đã đặt tên |
 
-> Bộ lọc mặc định có mốc **đến ngày 31/12/2025**. Nếu bạn muốn quét cả tệp mới hơn, đổi bằng phím `1` trước khi quét.
+> Mặc định bộ lọc thời gian là **mọi thời điểm** — công cụ không tự thu hẹp phạm vi quét thay bạn. Muốn nhắm tệp cũ thì đặt mốc bằng phím `1`, hoặc dùng luồng hướng dẫn ở màn hình chính vốn đã hiện sẵn dung lượng từng mốc.
 
 **Quét và thao tác**
 

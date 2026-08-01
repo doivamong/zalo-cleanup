@@ -31,7 +31,10 @@ try { $Host.UI.RawUI.WindowTitle = 'Dọn dẹp Zalo v5' } catch { }
 
 # ================================================================ trạng thái
 $script:FromDate    = $null
-$script:ToDate      = [datetime]'2025-12-31'
+# Mặc định không giới hạn hai đầu: công cụ không được tự thu hẹp phạm vi quét
+# thay bạn. Muốn nhắm tệp cũ thì chọn mốc trong Set-DateRange hoặc dùng luồng
+# hướng dẫn ở màn hình chính.
+$script:ToDate      = $null
 $script:Folders     = @()
 $script:Exts        = @()
 $script:ExFolders   = @()
@@ -105,6 +108,15 @@ function Write-Title($text) {
 function Show-DateLabel($d) {
     if ($null -eq $d) { return 'không giới hạn' }
     return $d.ToString('dd/MM/yyyy')
+}
+
+# Nhãn gộp cho cả khoảng. Không có mốc nào thì nói thẳng là mọi thời điểm,
+# đọc dễ hơn nhiều so với 'không giới hạn → không giới hạn'.
+function Show-DateRangeLabel($from, $to) {
+    if ($null -eq $from -and $null -eq $to) { return 'mọi thời điểm' }
+    if ($null -eq $from) { return 'đến ' + (Show-DateLabel $to) }
+    if ($null -eq $to)   { return 'từ ' + (Show-DateLabel $from) }
+    return (Show-DateLabel $from) + ' → ' + (Show-DateLabel $to)
 }
 
 function Show-Size([long]$bytes) {
@@ -1678,7 +1690,7 @@ function Invoke-Delete {
         Write-Host '  Cache hệ thống từ danh sách đã kiểm chứng. Ứng dụng tự tạo lại.' -ForegroundColor Green
         Write-Host '  Mục màu vàng phải tải lại từ mạng, có thể tốn băng thông.' -ForegroundColor Yellow
     } else {
-        Write-Host ('  Khoảng thời gian : {0} → {1}' -f (Show-DateLabel $script:FromDate), (Show-DateLabel $script:ToDate))
+        Write-Host ('  Khoảng thời gian : {0}' -f (Show-DateRangeLabel $script:FromDate $script:ToDate))
         Write-Host ''
         Write-Host '  Đây là dữ liệu thật. Tệp sẽ bị xóa hẳn, không qua Thùng rác,' -ForegroundColor Red
         Write-Host '  không khôi phục được. Ảnh và video quá hạn lưu trên máy chủ Zalo' -ForegroundColor Red
@@ -2096,7 +2108,7 @@ function Set-DateRange {
         default { Write-Host '  Giữ nguyên.' -ForegroundColor DarkGray; return }
     }
     Reset-Scan
-    Write-Host ('  Đã đặt: {0} → {1}' -f (Show-DateLabel $script:FromDate), (Show-DateLabel $script:ToDate)) -ForegroundColor Green
+    Write-Host ('  Đã đặt: {0}' -f (Show-DateRangeLabel $script:FromDate $script:ToDate)) -ForegroundColor Green
 }
 
 function Select-FolderList($title, $current, $isExclude) {
@@ -2464,8 +2476,8 @@ function Show-AdvancedMenu {
     while ($true) {
         Clear-Host
         Write-Title 'Tùy chọn nâng cao'
-        Write-Host ('  Bộ lọc: {0} → {1} · thư mục {2} · đuôi {3} · từ {4} KB' -f `
-                    (Show-DateLabel $script:FromDate), (Show-DateLabel $script:ToDate),
+        Write-Host ('  Bộ lọc: {0} · thư mục {1} · đuôi {2} · từ {3} KB' -f `
+                    (Show-DateRangeLabel $script:FromDate $script:ToDate),
                     $(if ($script:Folders.Count) { $script:Folders -join ',' } else { 'tất cả' }),
                     $(if ($script:Exts.Count) { $script:Exts -join ',' } else { 'tất cả' }),
                     $script:MinSizeKB) -ForegroundColor DarkGray

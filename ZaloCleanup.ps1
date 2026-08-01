@@ -306,22 +306,85 @@ function Show-PolicyLabel {
 # hỏi đúng một câu rẻ nhất: đường dẫn có nằm TRONG vùng bảo vệ không.
 # Chiều ngược lại (đường dẫn là CHA của vùng bảo vệ) do Test-ProtectedRoot lo,
 # và chỉ được hỏi cho vài chục thư mục gốc.
-function Test-Protected($path) {
+# Chỉ mục tra cứu dựng sẵn cho Test-Protected. Ngữ nghĩa chặn KHÔNG đổi một ly,
+# chỉ đổi cách tra:
+#   ProtectedExact  — đường dẫn mà chính nó bị chặn (phép so bằng của bản cũ)
+#   ProtectedPrefix — thư mục mà mọi thứ nằm dưới đều bị chặn (phép so tiền tố)
+# Luật Depth=0 chỉ vào ProtectedExact, đúng như bản cũ chỉ so bằng cho chúng
+# và không bao giờ so tiền tố.
+#
+# Bắt buộc dùng StringComparer::OrdinalIgnoreCase cho cả hai. Bảng băm mặc định
+# của PowerShell so theo vùng miền hiện hành, mà công cụ có chạy dưới vi-VN —
+# so theo vùng miền là cách để một đường dẫn lọt lưới ở máy này mà không lọt ở
+# máy khác.
+$script:ProtectedExact      = $null
+$script:ProtectedPrefix     = $null
+$script:ProtectedDirCache   = $null
+$script:ProtectedIndexFor   = $null   # DataRoot tại lúc dựng chỉ mục
+$script:ProtectedIndexRules = $null   # tham chiếu mảng luật tại lúc dựng chỉ mục
+
+function Build-ProtectedIndex {
+    $exact  = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $prefix = New-Object 'Collections.Generic.List[string]'
+
     foreach ($p in $script:ProtectedAbs) {
-        if ($path.StartsWith($p + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
-        if ($path.Equals($p, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        [void]$exact.Add($p)
+        $prefix.Add($p)
     }
     foreach ($r in $script:ProtectedRules) {
-        if ($r.Depth -eq 'any') { continue }   # đã xét ở vòng trên
-        if ($path.Equals($r.Path, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        if ($r.Depth -eq 'any') { continue }   # đã nạp ở vòng trên
+        [void]$exact.Add($r.Path)
     }
-    if ([string]::IsNullOrWhiteSpace($script:DataRoot)) { return $false }
-    foreach ($n in $script:ProtectedNames) {
-        $p = (Join-Path $script:DataRoot $n)
-        if ($path.StartsWith($p + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
-        if ($path.Equals($p, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    if (-not [string]::IsNullOrWhiteSpace($script:DataRoot)) {
+        foreach ($n in $script:ProtectedNames) {
+            $p = (Join-Path $script:DataRoot $n)
+            [void]$exact.Add($p)
+            $prefix.Add($p)
+        }
     }
-    return $false
+
+    $script:ProtectedExact      = $exact
+    $script:ProtectedPrefix     = $prefix
+    $script:ProtectedDirCache   = New-Object 'Collections.Generic.Dictionary[string,bool]' ([StringComparer]::OrdinalIgnoreCase)
+    $script:ProtectedIndexFor   = $script:DataRoot
+    $script:ProtectedIndexRules = $script:ProtectedRules
+}
+
+function Test-Protected($path) {
+    # Tự dựng lại khi luật hoặc DataRoot đổi — đổi tài khoản bằng phím T là đổi
+    # DataRoot. Không trông vào việc nhớ gọi hàm dựng lại ở đúng chỗ: quên một
+    # chỗ ở đây nghĩa là mất một lớp chặn, nên hàm tự kiểm lấy.
+    if ($null -eq $script:ProtectedExact -or
+        $script:ProtectedIndexFor -ne $script:DataRoot -or
+        -not [object]::ReferenceEquals($script:ProtectedIndexRules, $script:ProtectedRules)) {
+        Build-ProtectedIndex
+    }
+
+    if ($script:ProtectedExact.Contains($path)) { return $true }
+
+    # Nằm dưới vùng bảo vệ hay không chỉ phụ thuộc thư mục chứa nó, mà hàng vạn
+    # tệp dùng chung một thư mục — nên nhớ kết quả theo thư mục thay vì hỏi lại
+    # từng tệp.
+    #
+    # Cắt bằng LastIndexOf chứ không dùng [IO.Path]::GetDirectoryName: hàm kia
+    # ném lỗi khi đường dẫn có ký tự lạ, mà một hàm canh cửa thì không được phép
+    # ném — ném ở đây là bỏ trống cửa.
+    $i = $path.LastIndexOf('\')
+    if ($i -lt 0) { return $false }
+    $dir = $path.Substring(0, $i)
+
+    if ($script:ProtectedDirCache.ContainsKey($dir)) { return $script:ProtectedDirCache[$dir] }
+
+    $hit = $false
+    foreach ($p in $script:ProtectedPrefix) {
+        if ($dir.Equals($p, [StringComparison]::OrdinalIgnoreCase) -or
+            $dir.StartsWith($p + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            $hit = $true
+            break
+        }
+    }
+    $script:ProtectedDirCache[$dir] = $hit
+    return $hit
 }
 
 # Dùng cho THƯ MỤC GỐC: gốc quét, gốc dọn thư mục rỗng, đường dẫn trong catalog.json.

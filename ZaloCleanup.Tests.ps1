@@ -284,7 +284,8 @@ Write-Host ''
 Write-Host '── Hạ tầng: Get-RelPath, Remove-EmptyDirs, vùng bảo vệ' -ForegroundColor Yellow
 $errs2 = $null; $toks2 = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$toks2, [ref]$errs2)
-foreach ($fn in @('Get-RelPath', 'Test-Protected', 'Test-ProtectedRoot', 'Initialize-ProtectedAbs',
+foreach ($fn in @('Get-RelPath', 'Test-Protected', 'Build-ProtectedIndex', 'Test-ProtectedRoot',
+                  'Initialize-ProtectedAbs',
                   'Test-IsReparsePoint', 'Remove-EmptyDirs', 'Invoke-TruncateLocked',
                   'Test-CatalogEntry', 'Get-CatalogDefs', 'Get-CatalogDefaults',
                   'Get-FreeBytes', 'Get-LongPath', 'Get-DriveLabel')) {

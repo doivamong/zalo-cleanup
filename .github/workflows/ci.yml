@@ -23,10 +23,14 @@ concurrency:
 
 jobs:
   # ------------------------------------------------------------------ bản PowerShell
-  # 192 phép thử là HỢP ĐỒNG cho cả hai bản. Từ mốc M3, job này chạy thêm một
+  # Bộ test này là HỢP ĐỒNG cho cả hai bản. Từ mốc M3, job này chạy thêm một
   # lượt nữa trỏ vào zalo-cli.exe với cùng tệp test, không sửa một ký tự.
+  #
+  # Cố ý không ghi số phép thử ở đây lẫn ở tên job: con số đổi mỗi lần thêm test,
+  # mà chỗ này nằm ngoài tầm với của chốt chống trôi số trong bộ test. Đã trôi
+  # một lần — tên job cũ ghi 192 trong khi thật sự là 204.
   powershell:
-    name: 192 phép thử · bản PowerShell
+    name: Bộ test hồi quy · bản PowerShell
     runs-on: windows-latest
     timeout-minutes: 25
     steps:

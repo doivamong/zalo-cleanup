@@ -84,9 +84,9 @@ Cần tay người, tôi không làm được: ngắt mạng, mở một hội t
 
 # P3 — Phiên triển khai Rust
 
-## P3-A · Kế hoạch phải trả lời trước khi viết code
+## P3-A · Kế hoạch — ✅ ĐÃ LẬP: [`ke-hoach-port.md`](ke-hoach-port.md)
 
-Chín câu ở mục 9 của [`rust-port-brief.md`](rust-port-brief.md). Tóm tắt:
+Chín câu ở mục 9 của [`rust-port-brief.md`](rust-port-brief.md) đã được trả lời hết trong [`ke-hoach-port.md`](ke-hoach-port.md), kèm bảy mốc M0–M6 có cổng đo được và bốn tiêu chí dừng D-1…D-4. Tóm tắt câu hỏi:
 
 1. Chia mô-đun — tách rõ **lõi an toàn** khỏi **vỏ giao diện**, lõi phải kiểm thử được mà không cần giao diện
 2. Chọn crate, và cân với lời hứa "0 phụ thuộc"
@@ -136,8 +136,9 @@ Dán nguyên khối dưới đây vào một phiên mới.
 ```text
 Kho mã: D:\zalo-tool  ·  https://github.com/doivamong/zalo-cleanup  ·  nhánh main
 
-Đọc bốn tài liệu này trước khi làm bất cứ việc gì, đọc hết chứ đừng lướt:
+Đọc năm tài liệu này trước khi làm bất cứ việc gì, đọc hết chứ đừng lướt:
   docs/viec-con-lai.md      — việc còn lại, đọc TRƯỚC TIÊN
+  docs/ke-hoach-port.md     — kế hoạch bảy mốc, cổng từng mốc, tiêu chí dừng
   docs/quyet-dinh.md        — 12 quyết định đã chốt, và ba chỗ bác lại hội đồng
   docs/rust-port-brief.md   — thực trạng, bài học đã trả giá, câu kế hoạch phải trả lời
   docs/ui-ux-council.md     — bản thiết kế giao diện chốt của hội đồng UI-UX
@@ -151,15 +152,22 @@ D:\zalo-tool\rust\. Hai bản chạy song song, bản PowerShell KHÔNG bị b�
 
 LÀM THEO ĐÚNG THỨ TỰ NÀY:
 
-Bước 1 — làm P1.
-  Năm việc nhỏ trên bản PowerShell, đều có lợi ngay cho người dùng hôm nay.
-  P1-1 khóa liên tiến trình là điều kiện của nhiều thứ về sau.
+Bước 1 — mốc M0 trong docs/ke-hoach-port.md.
+  Dựng workspace rust\ và CI. Cổng M0: cargo tree -p zalo-core KHÔNG được chứa
+  eframe, egui, winit. Dựng CI chạy ZaloCleanup.Tests.ps1 cho CẢ hai bản ngay
+  từ mốc này, đừng để sau — hai bản không cùng chạy một bộ test là hai bản đang
+  lặng lẽ trở thành hai công cụ khác nhau.
 
-Bước 2 — lập kế hoạch port, trả lời chín câu ở P3-A.
-  CHƯA viết code Rust ở bước này. Ra kế hoạch trước, có mốc dừng đo được.
+Bước 2 — M1 lõi an toàn, rồi M2 duyệt cây và băm.
+  Sau M2 là mốc kiểm điểm BẮT BUỘC: lúc đó đã biết lõi có port đúng không và có
+  nhanh hơn thật không, mà chưa tiêu công vào giao diện. Đây là chỗ rẻ nhất để
+  đổi ý.
 
-Bước 2 — bắt đầu port theo kế hoạch, lõi trước vỏ sau.
-  Mỗi bước phải có chốt đối chiếu song song với bản PowerShell.
+Bước 3 — M3 tới M6 theo đúng cổng đã ghi trong kế hoạch.
+  M3 là mốc quyết định: 69 phép thử E2E hiện có phải chạy được trên bản Rust mà
+  KHÔNG SỬA một ký tự nào.
+
+Chạm bất kỳ tiêu chí dừng D-1 tới D-4 nào thì DỪNG và báo cáo, đừng tự đi tiếp.
 
 QUY TẮC BẤT DI DỊCH KHI LÀM:
 

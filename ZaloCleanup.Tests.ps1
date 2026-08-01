@@ -326,6 +326,39 @@ Assert 'Partitions sống sót qua lượt xóa theo bộ lọc' `
 Assert 'Tệp ngoài vùng bảo vệ vẫn bị xóa đúng' `
     (-not (Test-Path (Join-Path $rIn 'video\v1'))) 'Không xóa được tệp thường'
 
+# ---------------------------------------------------------------- gốc ở dạng ngắn 8.3
+# Vùng bảo vệ so bằng CHUỖI. Đưa gốc vào ở dạng ngắn 8.3 kiểu ZALODO~1 trong khi
+# Get-ChildItem trả về đường dẫn dài thì hai bên không bao giờ khớp, và vùng bảo
+# vệ BIẾN MẤT KHÔNG MỘT LỜI CẢNH BÁO — Database với Partitions bị xóa sạch.
+#
+# Lỗi này do CI tìm ra: máy chủ GitHub có %TEMP% dạng ngắn nên nhóm phép thử ở
+# trên đỏ ngay lần chạy đầu, còn trên máy phát triển thì vẫn xanh. Phép thử dưới
+# đây tự dựng dạng ngắn nên bắt được lỗi trên MỌI máy, không phụ thuộc %TEMP%.
+Write-Host ''
+Write-Host '── Gốc đưa vào ở dạng ngắn 8.3 thì vùng bảo vệ vẫn phải chặn' -ForegroundColor Yellow
+$rSh = New-Sandbox 'ngan83'
+New-TestFile (Join-Path $rSh 'video\s1') (New-Object byte[] 512) $old
+New-TestFile (Join-Path $rSh 'video\s2') (New-Object byte[] 512) $old
+New-TestFile (Join-Path $rSh 'Database\_production\chat.db') (New-Object byte[] 4096) $old
+New-TestFile (Join-Path $rSh 'Partitions\session\p1') (New-Object byte[] 2048) $old
+
+# Lấy dạng 8.3 mà không cần COM: cmd tự cho qua %~s
+$rShort = (& cmd /c "for %I in (`"$rSh`") do @echo %~sI").Trim()
+Assert 'Dựng được đường dẫn dạng ngắn để thử' `
+    ($rShort -ne '' -and (Test-Path -LiteralPath $rShort)) ("Nhận được: " + $rShort)
+
+$oSh = Invoke-Tool $rShort @('9', '7', '', 'X', '2', 'XÓA', '', '', '0') $rShort
+Assert 'Gốc dạng ngắn: vẫn báo có chặn tệp thuộc vùng bảo vệ' ($oSh -match 'Đã chặn') `
+    'Vùng bảo vệ im lặng biến mất khi gốc ở dạng ngắn'
+Assert 'Gốc dạng ngắn: chỉ nhận 2 tệp ngoài vùng bảo vệ' ((Get-ReportedCount $oSh 'Tìm thấy') -eq 2) `
+    ("Công cụ báo " + (Get-ReportedCount $oSh 'Tìm thấy') + " tệp")
+Assert 'Gốc dạng ngắn: Database sống sót' `
+    (Test-Path (Join-Path $rSh 'Database\_production\chat.db')) 'Database bị xóa'
+Assert 'Gốc dạng ngắn: Partitions sống sót' `
+    (Test-Path (Join-Path $rSh 'Partitions\session\p1')) 'Partitions bị xóa'
+Assert 'Gốc dạng ngắn: tệp thường vẫn bị xóa đúng' `
+    (-not (Test-Path (Join-Path $rSh 'video\s1'))) 'Không xóa được tệp thường'
+
 # ---------------------------------------------------------------- nhãn phím X
 # Nhãn cũ "Xóa kết quả quét đang giữ" đọc tự nhiên trong tiếng Việt là "bỏ kết
 # quả quét đi" — một việc vô hại — trong khi phím này gọi Invoke-Delete và xóa
@@ -366,7 +399,7 @@ Write-Host '── Hạ tầng: Get-RelPath, Remove-EmptyDirs, vùng bảo vệ'
 $errs2 = $null; $toks2 = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$toks2, [ref]$errs2)
 foreach ($fn in @('Get-RelPath', 'Test-Protected', 'Build-ProtectedIndex', 'Test-ProtectedRoot',
-                  'Initialize-ProtectedAbs', 'Remove-ToneMarks', 'Test-ConfirmPhrase',
+                  'Initialize-ProtectedAbs', 'Remove-ToneMarks', 'Test-ConfirmPhrase', 'Get-CanonPath',
                   'Test-BackupClean', 'Test-KeeperAlive',
                   'Test-IsReparsePoint', 'Remove-EmptyDirs', 'Invoke-TruncateLocked',
                   'Test-CatalogEntry', 'Get-CatalogDefs', 'Get-CatalogDefaults',
@@ -446,6 +479,26 @@ Assert 'TÔI CHẤP NHẬN MẤT vẫn nhận đủ ba dạng' `
      -not [bool](Test-ConfirmPhrase 'tôi chấp nhận mất' 'TÔI CHẤP NHẬN MẤT' 'TOI CHAP NHAN MAT')) 'Sai'
 Assert 'Remove-ToneMarks giữ nguyên chữ Đ' ((Remove-ToneMarks 'ĐÃ XÓA') -ceq 'ĐA XOA') `
     ("Nhận được: " + (Remove-ToneMarks 'ĐÃ XÓA'))
+
+# ---------------------------------------------------------------- chuẩn hóa đường dẫn
+# Đường dẫn dạng ngắn 8.3 là cách vùng bảo vệ biến mất không một lời cảnh báo:
+# nó so bằng CHUỖI, mà Get-ChildItem thì trả về đường dẫn dài. Xem thêm nhóm phép
+# thử đầu-cuối "Gốc đưa vào ở dạng ngắn 8.3" ở phía trên — nhóm đó kiểm hành vi,
+# nhóm này kiểm hàm.
+$canonDir = Join-Path $sbRoot 'canon'
+New-Item -ItemType Directory -Force $canonDir | Out-Null
+$canonShort = (& cmd /c "for %I in (`"$canonDir`") do @echo %~sI").Trim()
+Assert 'Dựng được dạng ngắn 8.3 để thử Get-CanonPath' `
+    ($canonShort -ne '' -and (Test-Path -LiteralPath $canonShort)) ("Nhận được: " + $canonShort)
+Assert 'Get-CanonPath mở tên 8.3 thành tên dài' `
+    ((Get-CanonPath $canonShort) -eq $canonDir.TrimEnd('\')) `
+    ("Nhận được: " + (Get-CanonPath $canonShort) + " · mong đợi: " + $canonDir)
+Assert 'Get-CanonPath bỏ gạch chéo thừa' `
+    ((Get-CanonPath ($canonDir + '\')) -eq $canonDir.TrimEnd('\')) 'Sai'
+Assert 'Get-CanonPath giữ nguyên gốc ổ đĩa' ((Get-CanonPath 'C:\') -eq 'C:\') `
+    ("Nhận được: " + (Get-CanonPath 'C:\'))
+Assert 'Get-CanonPath không ném lỗi với chuỗi rỗng' ((Get-CanonPath '') -eq '') `
+    'Ném lỗi hoặc đổi giá trị'
 
 # ---------------------------------------------------------------- chốt sao lưu sạch
 # Sạch = không lỗi VÀ trọn vẹn. Ca nguy hiểm nhất là ổ đích hết chỗ giữa chừng:

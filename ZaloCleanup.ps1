@@ -52,6 +52,9 @@ $script:TreeCache   = $null
 $script:TreeScanSec = $null      # lần đo trước mất bao lâu, để quyết định có tự đo lại không
 $script:LastScanErrors = 0
 
+# Hai giá trị này được chuẩn hóa ở khối main trước khi dựng vùng bảo vệ, vì
+# người dùng có thể đưa vào đường dẫn dạng ngắn 8.3, có gạch chéo cuối, hoặc
+# lối tương đối — mà vùng bảo vệ thì so bằng chuỗi. Xem Get-CanonPath.
 $script:Root        = $Root
 $script:DataRoot    = $DataRoot
 
@@ -238,6 +241,34 @@ function Get-FreeBytes($path) {
 function Get-DriveLabel($path) {
     try { return ([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($path))).TrimEnd('\', '/').TrimEnd(':') }
     catch { return $script:SysDrive.TrimEnd(':') }
+}
+
+# Đưa một đường dẫn về DẠNG CHUẨN: đầy đủ, tên dài, không có gạch chéo thừa.
+#
+# Vì sao bắt buộc, và vì sao nó là chuyện an toàn chứ không phải chuyện gọn gàng:
+#
+# Vùng bảo vệ so bằng CHUỖI. Nếu DataRoot được đưa vào ở dạng ngắn 8.3 kiểu
+#   C:\Users\RUNNE~1\...\ZALODO~1
+# trong khi Get-ChildItem trả về đường dẫn dài
+#   C:\Users\runneradmin\...\ZaloDownloads
+# thì hai bên không bao giờ khớp, và VÙNG BẢO VỆ BIẾN MẤT KHÔNG MỘT LỜI CẢNH BÁO.
+# Đo tận nơi: chạy công cụ với gốc dạng ngắn thì Database và Partitions bị xóa
+# sạch, và màn hình không hề in dòng "Đã chặn ... tệp thuộc vùng bảo vệ".
+#
+# Lỗi này do CI tìm ra: máy chủ GitHub có %TEMP% dạng ngắn nên bốn phép thử vùng
+# bảo vệ đỏ ngay lần chạy đầu, trong khi trên máy phát triển chúng vẫn xanh.
+#
+# DirectoryInfo.FullName mở được tên 8.3 thành tên dài; Resolve-Path thì KHÔNG,
+# nên đừng thay bằng nó. Không dùng Add-Type hay P/Invoke, đúng luật của dự án.
+function Get-CanonPath($path) {
+    if ([string]::IsNullOrWhiteSpace($path)) { return $path }
+    $p = $path
+    try { $p = ([IO.DirectoryInfo]::new($path)).FullName }
+    catch {
+        try { $p = [IO.Path]::GetFullPath($path) } catch { return $path }
+    }
+    if ($p -match '^[A-Za-z]:\\$') { return $p }   # gốc ổ đĩa giữ gạch chéo
+    return $p.TrimEnd('\')
 }
 
 # Loại ổ đĩa của một đường dẫn: Fixed, Removable, Network, CDRom, Ram, Unknown.
@@ -427,8 +458,12 @@ function Build-ProtectedIndex {
         [void]$exact.Add($r.Path)
     }
     if (-not [string]::IsNullOrWhiteSpace($script:DataRoot)) {
+        # Chuẩn hóa ngay tại đây, không trông vào việc người gọi đã chuẩn hóa.
+        # Đây là chốt cuối của vùng bảo vệ; một dạng đường dẫn lạ lọt tới đây là
+        # vùng bảo vệ biến mất không một lời cảnh báo. Xem Get-CanonPath.
+        $dr = Get-CanonPath $script:DataRoot
         foreach ($n in $script:ProtectedNames) {
-            $p = (Join-Path $script:DataRoot $n)
+            $p = (Join-Path $dr $n)
             [void]$exact.Add($p)
             $prefix.Add($p)
         }
@@ -657,7 +692,7 @@ function Resolve-DataRoot($root) {
         $p = Split-Path $root -Parent
         $p = Split-Path $p -Parent
         $p = Split-Path $p -Parent
-        if (Test-Path -LiteralPath $p) { return $p }
+        if (Test-Path -LiteralPath $p) { return (Get-CanonPath $p) }
     } catch { }
     return ''
 }
@@ -3075,6 +3110,10 @@ if (-not (Enter-SingleInstance)) {
 }
 
 Read-Settings
+# Chuẩn hóa TRƯỚC khi dựng vùng bảo vệ. Vùng bảo vệ so bằng chuỗi, nên một
+# dạng đường dẫn lạ ở đây là vùng bảo vệ biến mất không một lời cảnh báo.
+$script:Root     = Get-CanonPath $script:Root
+$script:DataRoot = Get-CanonPath $script:DataRoot
 Initialize-ProtectedAbs
 if ($script:Root -eq '' -or -not (Test-Path -LiteralPath $script:Root)) { Select-Root -Quiet }
 $script:HasZalo = ($script:Root -ne '' -and (Test-Path -LiteralPath $script:Root))

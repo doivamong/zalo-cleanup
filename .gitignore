@@ -11,6 +11,11 @@ profiles.json
 # Chỉ mục bản sao lưu, nếu vô tình nằm trong thư mục công cụ.
 _zalocleanup_backup.json
 
+# Bản Rust ở rust\ — thư mục build phình rất nhanh, không bao giờ đưa lên repo.
+rust/target/
+# Cargo.lock thì GIỮ LẠI: đây là ứng dụng phát hành dạng exe dựng sẵn, nên phải
+# build lại được đúng y hệt bộ phụ thuộc của bản đã phát hành.
+
 # Rác của Windows và trình soạn thảo
 Thumbs.db
 desktop.ini

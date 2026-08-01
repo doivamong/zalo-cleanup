@@ -327,6 +327,90 @@ Assert 'Chặn .rustup'           (Test-Protected (Join-Path $env:USERPROFILE '.
 Assert 'Công cụ không tự xóa chính mình' (Test-Protected $tool) 'Tự xóa được chính mình'
 Assert 'Không chặn nhầm cache thường' (-not (Test-Protected (Join-Path $env:USERPROFILE '.cache\pip\x'))) 'Chặn nhầm'
 
+# ---------------------------------------------------------------- vùng bảo vệ: đối chiếu với bản đặc tả
+# Test-Protected chạy cho từng tệp trong mọi lượt quét nên đã được tăng tốc
+# bằng bảng băm và bộ nhớ đệm theo thư mục. Cái gì nhanh thì dễ sai, nên giữ ở
+# đây một bản viết ngây thơ đúng theo lời văn của luật — chậm, nhưng soi bằng
+# mắt là ra — rồi bắt bản thật khớp với nó trên tập đầu vào dựng máy móc quanh
+# từng luật.
+#
+# Đây là BẢN ĐẶC TẢ, không phải bản cũ chép lại. Sửa Test-Protected mà lệch
+# khỏi nó thì hoặc là sửa sai, hoặc là đã đổi ý về luật — và khi đó phải sửa cả
+# hai nơi cùng một lúc, có ý thức.
+function Test-ProtectedSpec($path) {
+    foreach ($r in $script:ProtectedRules) {
+        if ($path.Equals($r.Path, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        if ($r.Depth -eq 'any' -and
+            $path.StartsWith($r.Path + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    if ([string]::IsNullOrWhiteSpace($script:DataRoot)) { return $false }
+    foreach ($n in $script:ProtectedNames) {
+        $p = Join-Path $script:DataRoot $n
+        if ($path.Equals($p, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        if ($path.StartsWith($p + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    return $false
+}
+
+$drSaved  = $script:DataRoot
+$protDiff = @()
+$protN    = 0
+# Chạy lại toàn bộ dưới ba giá trị DataRoot: chưa chọn tài khoản, và hai tài
+# khoản khác nhau. Vừa phủ luật theo DataRoot, vừa ép chỉ mục phải dựng lại.
+foreach ($dr in @('', 'C:\Duonglieu\ZaloData', 'D:\Khac\ZaloData')) {
+    $script:DataRoot = $dr
+    $cases = New-Object Collections.Generic.List[string]
+    foreach ($r in $script:ProtectedRules) {
+        $p = $r.Path
+        $cases.Add($p)                          # chính nó
+        $cases.Add($p.ToUpper())                # viết hoa
+        $cases.Add($p.ToLower())                # viết thường
+        $cases.Add($p + '\')                    # có gạch chéo cuối
+        $cases.Add($p + '\con.txt')             # con trực tiếp
+        $cases.Add($p + '\a\b\c\sau.bin')       # con ở sâu
+        $cases.Add($p + 'x\ten_gan_giong.txt')  # tên gần giống, KHÔNG được chặn
+        $cases.Add($p + '_khac\z.txt')          # tên gần giống kiểu khác
+    }
+    if ($dr -ne '') {
+        foreach ($n in $script:ProtectedNames) {
+            $p = Join-Path $dr $n
+            $cases.Add($p); $cases.Add($p + '\'); $cases.Add($p + '\x.db')
+            $cases.Add($p + '\sau\sau\y.bin'); $cases.Add($p + 'X\z.txt')
+            $cases.Add($p.ToUpper()); $cases.Add($p.ToLower())
+        }
+    }
+    # Đầu vào dị dạng: hàm canh cửa không được phép ném lỗi với bất cứ thứ gì.
+    foreach ($e in @('', '\', 'C:\', 'C:', 'khong_co_gach_cheo', '\\may\chiase\t.txt')) { $cases.Add($e) }
+
+    foreach ($c in $cases) {
+        if ((Test-Protected $c) -ne (Test-ProtectedSpec $c)) { $protDiff += ("DataRoot='$dr' :: '$c'") }
+    }
+    $protN += $cases.Count
+}
+$script:DataRoot = $drSaved
+
+Assert ("Test-Protected khớp bản đặc tả trên $protN đầu vào") ($protDiff.Count -eq 0) `
+    ("Lệch " + $protDiff.Count + " ca, ví dụ: " + (($protDiff | Select-Object -First 3) -join ' | '))
+
+# Đổi tài khoản là đổi DataRoot. Chỉ mục dựng sẵn phải theo kịp, nếu không thì
+# tin nhắn của tài khoản mới mất lớp chặn còn tài khoản cũ bị chặn oan.
+$script:DataRoot = 'C:\Duonglieu\ZaloData'
+Assert 'Chặn Database của tài khoản đang chọn' `
+    (Test-Protected 'C:\Duonglieu\ZaloData\Database\msg.db') 'Không chặn'
+$script:DataRoot = 'D:\Khac\ZaloData'
+Assert 'Đổi DataRoot thì vùng bảo vệ đi theo tài khoản mới' `
+    ((Test-Protected 'D:\Khac\ZaloData\Database\msg.db') -and
+     -not (Test-Protected 'C:\Duonglieu\ZaloData\Database\msg.db')) `
+    'Chỉ mục còn dính DataRoot cũ'
+$script:DataRoot = $drSaved
+
+Assert 'Không chặn thư mục tên gần giống vùng bảo vệ' `
+    (-not (Test-Protected (Join-Path $env:WINDIR 'System32x\a.txt'))) 'Chặn nhầm'
+
+Initialize-ProtectedAbs
+Assert 'Dựng lại bộ luật thì chỉ mục cũng dựng lại theo' `
+    (Test-Protected (Join-Path $env:WINDIR 'WinSxS\x')) 'Mất lớp chặn sau khi dựng lại luật'
+
 $fb = Get-FreeBytes 'C:\'
 Assert 'Get-FreeBytes đọc được dung lượng ổ C' ($fb -gt 0) ("Nhận được: $fb")
 Assert 'Get-FreeBytes trả về -1 khi đường dẫn vô nghĩa' ((Get-FreeBytes '???|bad') -eq -1) 'Không trả về -1'

@@ -1157,10 +1157,29 @@ if ($Full) {
     $buf = New-Object byte[] 512
     for ($i = 0; $i -lt 20000; $i++) { [IO.File]::WriteAllBytes((Join-Path $dir ('f{0:D5}' -f $i)), $buf) }
     Get-ChildItem $dir -File | ForEach-Object { $_.LastWriteTime = $old }
+    # Tiến trình phá hoại phải chờ ĐÚNG MỐC, không chờ theo đồng hồ.
+    #
+    # Bản cũ ngủ 5 giây rồi mới xóa. Điều đó chỉ đúng khi công cụ chậm hơn 5
+    # giây — đúng với bản PowerShell, nhưng bản Rust xóa xong 20.000 tệp trong
+    # 3,58 giây (đo tận nơi), tức xong trước khi tiến trình phá hoại kịp ra tay.
+    # Phép thử đỏ, mà chẳng có lỗi nào ở công cụ cả: tiền đề "công cụ đủ chậm"
+    # đã hết đúng.
+    #
+    # Mốc đồng bộ dùng ở đây là TỆP NHẬT KÝ: cả hai bản đều tạo daxoa_*.log ngay
+    # khi bắt đầu xóa, và đó là hợp đồng chung chứ không phải chi tiết cài đặt
+    # của riêng bản nào. Chờ nó xuất hiện rồi mới xóa thì khe hở luôn mở đúng
+    # lúc, dù công cụ nhanh hay chậm.
     $sab = Start-Job -ScriptBlock {
-        param($d) Start-Sleep -Seconds 5
+        param($d, $ld, $moc)
+        $het = (Get-Date).AddSeconds(120)
+        while ((Get-Date) -lt $het) {
+            $co = Get-ChildItem $ld -Filter 'daxoa_*.log' -File -EA SilentlyContinue |
+                  Where-Object { $_.LastWriteTime -ge $moc }
+            if ($co) { break }
+            Start-Sleep -Milliseconds 30
+        }
         for ($i = 16000; $i -lt 20000; $i++) { try { [IO.File]::Delete((Join-Path $d ('f{0:D5}' -f $i))) } catch { } }
-    } -ArgumentList $dir
+    } -ArgumentList $dir, $logDir, (Get-Date)
     $o = Invoke-Tool $r7 @('9', '7', '', 'X', '2', 'XÓA', '', '', '0')
     Wait-Job $sab | Out-Null; Remove-Job $sab -Force
     Assert 'G4 báo cáo số tệp biến mất trước' ($o -match 'Biến mất trước khi xóa') 'Không báo cáo'

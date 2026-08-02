@@ -132,7 +132,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M1** Lõi an toàn | ✅ **đạt** | `361e250` · đối chiếu **57.572 đầu vào, 0 khác biệt** · 3 đột biến, cả ba đỏ |
 | **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
-| **M4** Động tới dữ liệu | ⬜ chưa | |
+| **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
 | **M5** Giao diện | ⬜ chưa | |
 | **M6** Phát hành | ⬜ chưa | Chặn bởi `P2-1`, ngân sách ký số |
 
@@ -240,11 +240,44 @@ Lý do đều giống nhau: phép thử đầu-cuối tương ứng hoặc chỉ
 
 `'{0:N2}'` của PowerShell đổi theo vùng miền (`1,234.56` ở en-US, `1.234,56` ở vi-VN); Rust không có khái niệm vùng miền nên luôn in kiểu en-US. Chỉ khác **dấu phân cách**, không khác con số, và không phép quyết định nào đọc lại chuỗi đã định dạng. Ghi ra đây thay vì để đó — một khác biệt không được viết xuống là một khác biệt sẽ bị phát hiện lại vào lúc bất tiện nhất.
 
-## M4 · Động tới dữ liệu
+## M4 · Động tới dữ liệu — ✅ đạt
 
 `act/` — xóa, sao lưu, khôi phục, dọn thư mục rỗng.
 
 > **Cổng M4:** ① bản sao lưu do **Rust** tạo phải khôi phục được bằng **PowerShell**, và ngược lại ② so SHA-256 từng tệp, không so số lượng ③ nhật ký hai bản khớp nhau về số dòng và trạng thái.
+
+**Kết quả:** [`rust/tools/cong-lien-thong.ps1`](../rust/tools/cong-lien-thong.ps1) — **19/19 đạt**, cả hai chiều, mỗi chiều 6 tệp gồm thư mục lồng nhau, tên có dấu, tệp rỗng và tệp vượt ngưỡng 128 KB của chữ ký nhanh. Hai nhật ký xóa khớp cả số dòng lẫn số lượng từng trạng thái.
+
+### Cổng đối chiếu song song mở rộng lên toàn bộ
+
+Ở M3, cổng chỉ đòi 28 phép thử đầu-cuối không xóa tệp. Từ M4 nó đòi **cả 67**, và chạy kèm `-Full` — bốn phép thử chậm trong đó chính là bốn đường nguy hiểm nhất của mốc này. **67/67 đạt.**
+
+### Một phép thử phải sửa, và vì sao đó không phải chiều bản Rust
+
+Phép thử `G4 tệp biến mất giữa chừng` cho một tiến trình phá hoại **ngủ 5 giây** rồi mới xóa tệp, để dựng khe hở giữa lúc quét và lúc xóa. Tiền đề ngầm là công cụ chạy lâu hơn 5 giây — đúng với bản PowerShell.
+
+Đo tận nơi: bản Rust xóa xong **20.000 tệp trong 3,58 giây**, tức xong trước khi tiến trình phá hoại kịp ra tay. Phép thử đỏ mà chẳng có lỗi nào ở công cụ cả.
+
+Đã đổi mốc đồng bộ từ **đồng hồ** sang **tệp nhật ký**: cả hai bản đều tạo `daxoa_*.log` ngay khi bắt đầu xóa, và đó là hợp đồng chung chứ không phải chi tiết cài đặt của riêng bản nào. Sửa này làm phép thử đáng tin hơn cho **cả hai** bản, và không nới lỏng điều kiện nào.
+
+### Tám cửa, tám đột biến, tám lần đỏ
+
+| Đột biến | Bị bắt bởi |
+|:---|:---|
+| Gỡ chốt vùng bảo vệ khỏi vòng xóa | `vung_bao_ve_chan_ngay_trong_vong_xoa` |
+| Gỡ chốt bản giữ lại còn sống | `mat_ban_giu_lai_thi_khong_xoa` |
+| Đếm tệp đã biến mất là đã xóa | `tep_bien_mat_truoc_khi_xoa_khong_duoc_dem_la_da_xoa` |
+| Dùng cỡ ghi lúc quét thay vì cỡ thật lúc xóa | `dung_co_that_luc_xoa_chu_khong_dung_co_luc_quet` |
+| Dọn thư mục rỗng bằng xóa **đệ quy** | `xoa_thu_muc_tu_choi_thu_muc_con_tep_ben_trong` |
+| Bỏ chốt "tệp không nằm dưới gốc quét" khi sao lưu | `tep_ngoai_goc_quet_bi_chan_chu_khong_ghi_ra_ngoai` |
+| Sao lưu thiếu tệp vẫn chấm là sạch | `sao_luu_sach_dung_ca_tam_ca` |
+| Ổ đích hết chỗ vẫn chấm là sạch | `sao_luu_sach_dung_ca_tam_ca` |
+
+Lượt đột biến đầu để lọt **một** cửa: đổi `remove_dir` thành `remove_dir_all` ngay trong vòng dọn thư mục mà không phép thử nào đỏ, vì mọi thư mục đưa tới đó đều đã rỗng sẵn nên hai hàm cho cùng kết quả. Khe hở thật nằm giữa lúc kết luận rỗng và lúc hạ tay. Đã tách thành `xoa_thu_muc_neu_rong` rồi hỏi thẳng: *đưa cho nó một thư mục CÓ tệp thì sao?*
+
+### Một chỗ cố ý khác bản PowerShell
+
+Bản PowerShell hỏi rồi **tự đóng Zalo** khi lượt dọn chạm vào dữ liệu của nó. Bản Rust **chỉ báo rồi dừng**, để người dùng tự đóng. Hai lý do: giết một ứng dụng nhắn tin đang chạy có thể làm mất tin nhắn chưa gửi, và nhánh ấy không có phép thử nào canh — sandbox của bộ test nằm trong `%TEMP%` nên không bao giờ chạm tới. Viết mã hủy tiến trình mà không có phép thử là đúng thứ dự án này đã thề không làm.
 
 ## M5 · Giao diện
 

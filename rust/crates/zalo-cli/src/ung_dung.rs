@@ -140,11 +140,18 @@ pub fn muc_xac_nhan(loai_quet: &str) -> MucXacNhan {
     }
 }
 
-/// Một tệp trong kết quả quét.
+pub use zalo_core::act::TepQuet;
+
+/// Trạng thái bản sao lưu vừa tạo, để bước xóa xét trước khi mở khóa.
 #[derive(Clone)]
-pub struct TepQuet {
-    pub duong_dan: String,
-    pub co: u64,
+pub struct SaoLuuGanNhat {
+    pub dau_quet: String,
+    pub thu_muc: String,
+    pub tong: usize,
+    pub da_chep: usize,
+    pub chep_hong: usize,
+    pub xac_minh_hong: usize,
+    pub het_cho: bool,
 }
 
 pub struct UngDung {
@@ -169,6 +176,10 @@ pub struct UngDung {
     pub quet: Option<Vec<TepQuet>>,
     pub loai_quet: String,
     pub goc_quet: String,
+    pub dau_quet: String,
+    /// Các gốc để dọn thư mục rỗng sau khi xóa.
+    pub goc_don_dep: Vec<String>,
+    pub sao_luu_gan_nhat: Option<SaoLuuGanNhat>,
 
     // ---- bộ đệm đo cây
     pub cay: Option<(usize, u64)>,
@@ -204,6 +215,9 @@ impl UngDung {
             quet: None,
             loai_quet: String::new(),
             goc_quet: String::new(),
+            dau_quet: String::new(),
+            goc_don_dep: Vec::new(),
+            sao_luu_gan_nhat: None,
             cay: None,
             loi_quet_lan_cuoi: 0,
             nhap: Nhap::moi(),
@@ -211,9 +225,64 @@ impl UngDung {
     }
 
     /// Nguyên tắc bất biến số 2: đổi bộ lọc là kết quả quét cũ **bị hủy**.
+    ///
+    /// Phải hủy cả bản sao lưu gần nhất. Giữ nó lại nghĩa là một bản sao lưu của
+    /// **kết quả quét cũ** vẫn mở khóa được bước xóa cho **kết quả quét mới** —
+    /// tức xóa những tệp chưa từng được sao lưu.
     fn huy_ket_qua_quet(&mut self) {
         self.quet = None;
         self.loai_quet.clear();
+        self.dau_quet.clear();
+        self.goc_don_dep.clear();
+        self.sao_luu_gan_nhat = None;
+    }
+
+    /// Bản sao lưu hiện có đúng là của kết quả quét đang giữ, và **sạch**.
+    ///
+    /// Tương ứng `Test-BackupClean`. **Không tự viết lại phép kiểm ở đây**: gọi
+    /// thẳng [`zalo_core::gate::sao_luu_sach`], nơi chốt ấy sống cùng phép thử
+    /// của riêng nó. Chép logic an toàn ra chỗ thứ hai là mời hai chỗ trôi khỏi
+    /// nhau, và chỗ trôi sẽ đúng là chỗ không có phép thử nào canh.
+    fn sao_luu_sach(&self) -> bool {
+        let bk = self
+            .sao_luu_gan_nhat
+            .as_ref()
+            .map(|b| zalo_core::gate::KetQuaSaoLuu {
+                dau_quet: b.dau_quet.clone(),
+                tong: b.tong as u64,
+                xong: b.da_chep as u64,
+                loi_chep: b.chep_hong as u64,
+                loi_xac_minh: b.xac_minh_hong as u64,
+                het_cho: b.het_cho,
+            });
+        zalo_core::gate::sao_luu_sach(bk.as_ref(), &self.dau_quet)
+    }
+
+    fn co_sao_luu_cua_lan_quet_nay(&self) -> bool {
+        matches!(&self.sao_luu_gan_nhat, Some(b) if b.dau_quet == self.dau_quet)
+    }
+
+    fn thu_muc_nhat_ky(&self) -> PathBuf {
+        sysinfo::thu_muc_cong_cu().join("logs")
+    }
+
+    /// Lượt dọn này có chạm vào thư mục dữ liệu Zalo thật không.
+    ///
+    /// Tương ứng `Test-TouchesZalo`. Sandbox của bộ test nằm trong `%TEMP%` nên
+    /// luôn trả `false` — đó là lý do các phép thử không bao giờ đụng tới nhánh
+    /// hỏi đóng Zalo.
+    fn cham_toi_zalo(&self) -> bool {
+        let nen = match std::env::var("APPDATA") {
+            Ok(a) if !a.trim().is_empty() => Path::new(&a).join("ZaloData"),
+            _ => return false,
+        };
+        let nen = nen.to_string_lossy().to_lowercase();
+        let mut cac: Vec<String> = self.goc_don_dep.clone();
+        if cac.is_empty() {
+            cac.push(self.goc_quet.clone());
+        }
+        cac.iter()
+            .any(|p| !p.trim().is_empty() && p.to_lowercase().starts_with(&nen))
     }
 
     fn canh_bao_loi_quet(&self) {
@@ -579,10 +648,7 @@ impl UngDung {
                 match self.xet_tep(&s, t.co, t.sua_luc, lo, hi, byte_toi_thieu) {
                     XetTep::Chan => bi_chan += 1,
                     XetTep::LoaiBoiBoLoc => {}
-                    XetTep::Nhan => ket.push(TepQuet {
-                        duong_dan: s,
-                        co: t.co,
-                    }),
+                    XetTep::Nhan => ket.push(TepQuet::moi(s, t.co)),
                 }
             }
         }
@@ -592,6 +658,9 @@ impl UngDung {
         self.quet = Some(ket);
         self.loai_quet = "DỮ LIỆU ZALO".into();
         self.goc_quet = self.goc.clone();
+        self.dau_quet = zalo_core::thoigian::luc_nay().dinh_dang();
+        self.goc_don_dep = vec![self.goc.clone()];
+        self.sao_luu_gan_nhat = None;
 
         println!();
         println!("  Tìm thấy   : {} tệp", hien::so(n as i64));
@@ -734,10 +803,7 @@ impl UngDung {
                 if duoi_kieu_dotnet(ten_tep(&s)).eq_ignore_ascii_case(".rescache") {
                     continue;
                 }
-                ket.push(TepQuet {
-                    duong_dan: s,
-                    co: t.co,
-                });
+                ket.push(TepQuet::moi(s, t.co));
                 n += 1;
                 b += t.co;
             }
@@ -760,6 +826,15 @@ impl UngDung {
         self.quet = Some(ket);
         self.loai_quet = "CACHE ZALO".into();
         self.goc_quet = self.goc_du_lieu.clone();
+        self.dau_quet = zalo_core::thoigian::luc_nay().dinh_dang();
+        // Chỉ dọn thư mục rỗng TRONG các thư mục cache, không dọn cả ZaloData.
+        self.goc_don_dep = CACHE_UNG_DUNG
+            .iter()
+            .map(|r| Path::new(&self.goc_du_lieu).join(r))
+            .filter(|p| p.is_dir())
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        self.sao_luu_gan_nhat = None;
         println!();
         println!(
             "  Tổng: {} tệp · {}",
@@ -842,10 +917,7 @@ impl UngDung {
             }
             if giu_theo_co.contains_key(&t.co) {
                 byte_ung_vien += t.co;
-                ung_vien.push(TepQuet {
-                    duong_dan: s,
-                    co: t.co,
-                });
+                ung_vien.push(TepQuet::moi(s, t.co));
             }
         }
         println!(
@@ -947,13 +1019,13 @@ impl UngDung {
         let mut loai_toan = 0usize;
         for (c, k, sig) in &cap {
             if sig.starts_with("FULL:") {
-                trung.push(c.clone());
+                trung.push(gan_ban_giu_lai(c, k));
                 continue;
             }
             match (toan.get(&c.duong_dan), toan.get(k)) {
                 (Some(a), Some(b)) => {
                     if a == b {
-                        trung.push(c.clone());
+                        trung.push(gan_ban_giu_lai(c, k));
                     } else {
                         loai_toan += 1;
                     }
@@ -982,6 +1054,9 @@ impl UngDung {
         self.goc_quet = self.goc.clone();
         self.quet = Some(trung);
         self.loai_quet = "BẢN TRÙNG LẶP".into();
+        self.dau_quet = zalo_core::thoigian::luc_nay().dinh_dang();
+        self.goc_don_dep = vec![self.goc.clone()];
+        self.sao_luu_gan_nhat = None;
         Some(())
     }
 
@@ -1060,7 +1135,11 @@ impl UngDung {
                     self.bao_cao_vung_bao_ve();
                     self.nhap.dong("  Enter để tiếp tục")?;
                 }
-                "1" | "3" | "4" | "5" | "6" | "9" | "V" | "L" | "C" | "T" => {
+                "9" => {
+                    self.sao_luu()?;
+                    self.nhap.dong("  Enter để tiếp tục")?;
+                }
+                "1" | "3" | "4" | "5" | "6" | "V" | "L" | "C" | "T" => {
                     println!();
                     println!("  Mục này chưa có ở bản Rust — xem docs/ke-hoach-port.md.");
                     self.nhap.dong("  Enter để tiếp tục")?;
@@ -1269,15 +1348,129 @@ impl UngDung {
             return Some(());
         }
 
-        match tra_loi.parse::<usize>() {
-            Ok(n) if n >= 1 && n <= bo.len() => {
-                println!();
-                println!("  Khôi phục thuộc mốc M4 và CHƯA có ở bản Rust.");
-                println!("  Chưa có tệp nào được ghi. Dùng bản PowerShell để khôi phục.");
+        let n = match tra_loi.parse::<usize>() {
+            Ok(n) if n >= 1 && n <= bo.len() => n,
+            _ => {
+                println!("  Số không hợp lệ. Đã hủy.");
+                return Some(());
             }
-            _ => println!("  Số không hợp lệ. Đã hủy."),
+        };
+        let bo_chon = bo[n - 1].clone();
+        let dich = bo_chon.ban_ke.goc_nguon.clone();
+
+        println!();
+        println!("  Nếu tệp đích đã tồn tại:");
+        println!("   1  Bỏ qua, giữ tệp hiện có   (mặc định, an toàn nhất)");
+        println!("   2  Ghi đè bằng bản sao lưu");
+        let ghi_de = self.nhap.dong("  Chọn (Enter = 1)")? == "2";
+
+        println!();
+        println!("  Sẽ khôi phục về: {dich}");
+        if !Path::new(&dich).is_dir() {
+            println!("  Thư mục đích không còn tồn tại. Sẽ được tạo lại.");
         }
+
+        // Đo chỗ trống TRƯỚC khi ghi byte đầu tiên. Khôi phục nửa chừng rồi hết
+        // chỗ để lại một trạng thái dở dang mà người dùng không biết còn thiếu
+        // gì — tệ hơn hẳn so với dừng hẳn và nói rõ thiếu bao nhiêu.
+        println!("  Đang tính dung lượng cần thiết...");
+        let (se_ghi, se_bo_qua, can) = do_cho_khoi_phuc(&bo_chon.thu_muc, &dich, ghi_de);
+        println!();
+        println!("  Sẽ ghi  : {} tệp", hien::so(se_ghi as i64));
+        if se_bo_qua > 0 {
+            println!("  Bỏ qua  : {} tệp đã tồn tại", hien::so(se_bo_qua as i64));
+        }
+        println!("  Cần chỗ : {}", hien::co(can));
+        let trong = sysinfo::byte_trong(&dich);
+        println!(
+            "  Ổ {} trống: {}",
+            sysinfo::nhan_o_dia(&dich),
+            hien::co(trong)
+        );
+        if se_ghi == 0 {
+            println!();
+            println!("  Không có gì để khôi phục.");
+            return Some(());
+        }
+        if trong >= 0 && trong < can {
+            println!();
+            println!(
+                "  Không đủ chỗ trên ổ {}. Thiếu khoảng {}.",
+                sysinfo::nhan_o_dia(&dich),
+                hien::co(can - trong)
+            );
+            println!("  Chưa ghi tệp nào. Khôi phục nửa chừng rồi hết chỗ sẽ để lại trạng thái");
+            println!("  dở dang, nên công cụ dừng hẳn thay vì làm liều.");
+            return Some(());
+        }
+        println!("  Đủ chỗ.");
+
+        if !self.chan_khi_zalo_dang_chay(&dich) {
+            println!("  Dừng lại, chưa khôi phục gì.");
+            return Some(());
+        }
+
+        let k = match zalo_core::act::khoi_phuc(
+            &bo_chon.thu_muc,
+            &dich,
+            ghi_de,
+            &self.thu_muc_nhat_ky(),
+        ) {
+            Ok(k) => k,
+            Err(e) => {
+                println!("  Không khôi phục được: {e}");
+                return Some(());
+            }
+        };
+        self.cay = None;
+        println!();
+        if k.het_cho {
+            println!("  Dừng sớm: ổ đích hết chỗ giữa chừng.");
+            println!(
+                "  Đã khôi phục {} tệp trước khi hết chỗ.",
+                hien::so(k.da_khoi_phuc as i64)
+            );
+            println!("  Bản sao lưu vẫn nguyên vẹn. Giải phóng thêm chỗ rồi chạy lại là an toàn.");
+        } else {
+            println!("  Đã khôi phục: {} tệp", hien::so(k.da_khoi_phuc as i64));
+        }
+        if k.bo_qua > 0 {
+            println!("  Bỏ qua (đã có): {} tệp", hien::so(k.bo_qua as i64));
+        }
+        if k.that_bai > 0 {
+            println!("  Thất bại      : {} tệp", hien::so(k.that_bai as i64));
+        }
+        println!("  Nhật ký: {}", k.tep_nhat_ky.display());
         Some(())
+    }
+
+    /// Zalo đang chạy mà lượt này chạm vào dữ liệu của nó thì **dừng lại**.
+    ///
+    /// Trả `true` nghĩa là đi tiếp được. Xem chú thích ở
+    /// [`zalo_core::sysinfo::tien_trinh_dang_chay`] về chỗ bản này cố ý khác bản
+    /// PowerShell: nó **không tự đóng Zalo**, chỉ báo rồi dừng.
+    fn chan_khi_zalo_dang_chay(&self, duong_dan: &str) -> bool {
+        let nen = match std::env::var("APPDATA") {
+            Ok(a) if !a.trim().is_empty() => Path::new(&a).join("ZaloData"),
+            _ => return true,
+        };
+        if !duong_dan
+            .to_lowercase()
+            .starts_with(&nen.to_string_lossy().to_lowercase())
+        {
+            return true;
+        }
+        let p = sysinfo::tien_trinh_dang_chay("Zalo");
+        if p.is_empty() {
+            return true;
+        }
+        println!();
+        println!(
+            "  Zalo đang chạy ({} tiến trình). Cần đóng trước khi thao tác.",
+            p.len()
+        );
+        println!("  Hãy tự đóng Zalo rồi chạy lại — bản này không tự tắt ứng dụng của bạn.");
+        false
     }
 
     // ============================================================ xóa
@@ -1316,15 +1509,20 @@ impl UngDung {
             println!("  sẽ mất vĩnh viễn.");
         }
 
-        // Chính sách sao lưu chỉ áp dụng cho dữ liệu thật. Ở M3 chưa có sao lưu
-        // nên chưa bao giờ có bản sạch — đúng thứ chính sách BATBUOC phải chặn.
-        if du_lieu_that && self.cai_dat.chinh_sach == zalo_core::store::ChinhSach::BatBuoc {
+        // Chính sách sao lưu chỉ áp dụng cho dữ liệu thật.
+        if du_lieu_that
+            && self.cai_dat.chinh_sach == zalo_core::store::ChinhSach::BatBuoc
+            && !self.sao_luu_sach()
+        {
             println!();
             println!("  Đã chặn: chính sách hiện tại là bắt buộc sao lưu.");
             println!("  Hãy sao lưu trong Tùy chọn nâng cao rồi quay lại xóa.");
             return Some(());
         }
-        if du_lieu_that && self.cai_dat.chinh_sach == zalo_core::store::ChinhSach::Hoi {
+        if du_lieu_that
+            && self.cai_dat.chinh_sach == zalo_core::store::ChinhSach::Hoi
+            && !self.co_sao_luu_cua_lan_quet_nay()
+        {
             println!();
             println!("  Kết quả này chưa được sao lưu. Sao lưu là cách duy nhất để còn đường lui.");
             println!();
@@ -1333,15 +1531,43 @@ impl UngDung {
             println!("   Enter để hủy");
             let bc = self.nhap.dong("  Chọn")?;
             if bc == "1" {
-                println!();
-                println!("  Sao lưu thuộc mốc M4 và chưa có ở bản Rust.");
-                println!("  Dừng lại, chưa xóa gì.");
-                return Some(());
+                self.sao_luu()?;
+                if !self.co_sao_luu_cua_lan_quet_nay() {
+                    println!();
+                    println!("  Chưa sao lưu được. Dừng lại, chưa xóa gì.");
+                    return Some(());
+                }
             } else if bc == "2" {
                 println!("  Đã chọn xóa mà không sao lưu.");
             } else {
                 println!("  Đã hủy. Không tệp nào bị đụng đến.");
                 return Some(());
+            }
+        }
+
+        // Sao lưu có mà KHÔNG sạch thì phải xác nhận nặng hơn hẳn. Xóa lúc này
+        // là mất vĩnh viễn đúng những tệp chưa được sao lưu tốt.
+        if let Some(b) = self.sao_luu_gan_nhat.clone() {
+            if b.dau_quet == self.dau_quet && (b.chep_hong > 0 || b.xac_minh_hong > 0) {
+                println!();
+                println!(
+                    "  Đã chặn: sao lưu chưa sạch (chép lỗi {}, xác minh lỗi {}).",
+                    hien::so(b.chep_hong as i64),
+                    hien::so(b.xac_minh_hong as i64)
+                );
+                println!("  Xóa bây giờ sẽ mất vĩnh viễn đúng những tệp chưa được sao lưu tốt.");
+                println!();
+                let tl = self
+                    .nhap
+                    .dong("  Vẫn muốn xóa? Gõ chính xác:  TÔI CHẤP NHẬN MẤT")?;
+                if !zalo_core::confirm::khop_cum_xac_nhan(
+                    &tl,
+                    "TÔI CHẤP NHẬN MẤT",
+                    "TOI CHAP NHAN MAT",
+                ) {
+                    println!("  Đã hủy. Không tệp nào bị đụng đến.");
+                    return Some(());
+                }
             }
         }
 
@@ -1357,10 +1583,337 @@ impl UngDung {
             return Some(());
         }
 
+        if self.cham_toi_zalo() && !self.chan_khi_zalo_dang_chay(&self.goc_quet.clone()) {
+            println!("  Dừng lại, chưa xóa gì.");
+            return Some(());
+        }
+
+        let trong_truoc = sysinfo::byte_trong(&self.goc_quet);
         println!();
-        println!("  Xóa tệp thuộc mốc M4 và CHƯA có ở bản Rust.");
-        println!("  Không tệp nào bị đụng đến. Dùng bản PowerShell để xóa.");
+        println!("  Đang xóa. Có thể bấm Ctrl+C để dừng an toàn bất cứ lúc nào.");
+
+        let dich_sl = self
+            .sao_luu_gan_nhat
+            .as_ref()
+            .filter(|b| b.dau_quet == self.dau_quet)
+            .map(|b| b.thu_muc.clone());
+        let r = match zalo_core::act::xoa(
+            &ds,
+            &self.vbv,
+            &self.loai_quet,
+            &self.dau_quet,
+            dich_sl.as_deref(),
+            !du_lieu_that && self.loai_quet != "BẢN TRÙNG LẶP",
+            &self.thu_muc_nhat_ky(),
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("  Không mở được nhật ký nên đã dừng, chưa xóa gì: {e}");
+                return Some(());
+            }
+        };
+
+        let mut goc_don = self.goc_don_dep.clone();
+        if goc_don.is_empty() {
+            goc_don.push(self.goc_quet.clone());
+        }
+        let so_thu_muc = zalo_core::act::don_thu_muc_rong(
+            &goc_don,
+            self.loai_quet != "CACHE HỆ THỐNG",
+            &self.vbv,
+        );
+
+        self.cay = None;
+        println!();
+        println!("  Đã xóa       : {} tệp", hien::so(r.da_xoa as i64));
+        println!("  Giải phóng   : {}", hien::co(r.byte_thu_hoi as i64));
+        println!("  Thư mục rỗng : {}", hien::so(so_thu_muc as i64));
+        if r.bien_mat > 0 {
+            println!(
+                "  Biến mất trước khi xóa: {} tệp (tiến trình khác đã xóa)",
+                hien::so(r.bien_mat as i64)
+            );
+        }
+        if r.vung_bao_ve > 0 {
+            println!(
+                "  Chặn bởi vùng bảo vệ  : {} tệp",
+                hien::so(r.vung_bao_ve as i64)
+            );
+        }
+        if r.mat_ban_goc > 0 {
+            println!(
+                "  Giữ lại vì mất bản gốc: {} tệp",
+                hien::so(r.mat_ban_goc as i64)
+            );
+            println!("  Bản gốc của những tệp đó đã biến mất hoặc đã đổi kể từ lúc quét,");
+            println!("  nên chúng không còn là bản thừa nữa. Quét lại để có kết quả đúng.");
+        }
+        if r.cat_cut > 0 {
+            println!(
+                "  Cắt cụt      : {} tệp đang bị khóa",
+                hien::so(r.cat_cut as i64)
+            );
+            println!("                 Tên tệp còn đó nhưng nội dung đã rỗng, dung lượng đã được thu về.");
+        }
+        if r.that_bai > 0 {
+            println!(
+                "  Thất bại     : {} tệp (đang bị khóa)",
+                hien::so(r.that_bai as i64)
+            );
+            for e in r.loi.iter().take(5) {
+                println!("    {e}");
+            }
+        }
+        println!("  Nhật ký      : {}", r.tep_nhat_ky.display());
+
+        let trong_sau = sysinfo::byte_trong(&self.goc_quet);
+        if trong_truoc >= 0 && trong_sau >= 0 {
+            let thu = trong_sau - trong_truoc;
+            let txt = if thu >= 0 {
+                format!("+{}", hien::co(thu))
+            } else {
+                format!("−{}", hien::co(-thu))
+            };
+            println!();
+            println!("  Ổ đĩa trước  : {}", hien::co(trong_truoc));
+            println!("  Ổ đĩa sau    : {}", hien::co(trong_sau));
+            println!("  Thực tế thu được: {txt}");
+
+            // R-12: dung lượng phải đo bằng chỗ trống THẬT của ổ đĩa. Xóa nhiều
+            // mà ổ không rộng thêm gần như chắc chắn là Volume Shadow Copy đang
+            // giữ lại khối cũ — dung lượng đổi chủ chứ không về với người dùng.
+            if r.byte_thu_hoi > 500 * 1024 * 1024 && thu < (r.byte_thu_hoi as i64) / 2 {
+                println!();
+                println!("  ─── Cảnh báo: chưa thu được dung lượng thật ───");
+                println!(
+                    "  Đã xóa {} nhưng ổ đĩa chỉ rộng thêm {txt}.",
+                    hien::co(r.byte_thu_hoi as i64)
+                );
+                println!("  Nguyên nhân gần như chắc chắn là Shadow Copy của System Restore.");
+            }
+        }
+
+        // Nguyên tắc bất biến số 1: xóa xong thì kết quả quét hết hiệu lực.
+        self.huy_ket_qua_quet();
         Some(())
+    }
+
+    // ============================================================ sao lưu
+
+    fn sao_luu(&mut self) -> Option<()> {
+        let ds = match &self.quet {
+            Some(v) if !v.is_empty() => v.clone(),
+            _ => {
+                println!("Chưa có kết quả quét.");
+                return Some(());
+            }
+        };
+        let tong: u64 = ds.iter().map(|t| t.co).sum();
+        let goc = if self.goc_quet.trim().is_empty() {
+            self.goc.clone()
+        } else {
+            self.goc_quet.clone()
+        };
+
+        hien::tieu_de("Sao lưu và xác minh");
+        for o in sysinfo::cac_o_dia() {
+            println!(
+                "   Ổ {}  trống {}",
+                sysinfo::nhan_o_dia(&o),
+                hien::co(sysinfo::byte_trong(&o))
+            );
+        }
+        println!("  Cần ít nhất: {}", hien::co(tong as i64));
+
+        let dich = self
+            .nhap
+            .dong("  Nhập thư mục đích (ví dụ D:\\SaoLuuZalo)")?;
+        if dich.is_empty() {
+            println!("  Đã hủy.");
+            return Some(());
+        }
+        let trong = sysinfo::byte_trong(&dich);
+        if trong < 0 {
+            println!("  Đường dẫn đích không hợp lệ: không đọc được ổ đĩa.");
+            return Some(());
+        }
+        // Chừa 2% cộng 100 MB: hệ tệp còn siêu dữ liệu, và một bản sao lưu vừa
+        // khít ổ đĩa là một bản sao lưu sắp hỏng.
+        let can = (tong as f64 * 1.02) as i64 + 100 * 1024 * 1024;
+        println!();
+        println!(
+            "  Ổ {} trống {}, cần {}",
+            sysinfo::nhan_o_dia(&dich),
+            hien::co(trong),
+            hien::co(can)
+        );
+        if trong < can {
+            println!();
+            println!("  Không đủ chỗ. Đã dừng, chưa chép tệp nào.");
+            println!(
+                "  Thiếu khoảng {}. Chọn ổ khác hoặc thu hẹp phạm vi.",
+                hien::co(can - trong)
+            );
+            return Some(());
+        }
+        println!("  Đủ chỗ.");
+
+        println!();
+        println!("  Mức xác minh sau khi chép:");
+        println!("   1  Kích thước toàn bộ, cộng SHA256 mẫu 50 tệp  (nhanh, mặc định)");
+        println!(
+            "   2  SHA256 toàn bộ                              (chậm nhưng chắc chắn tuyệt đối)"
+        );
+        let toan_bo = self.nhap.dong("  Chọn (Enter = 1)")? == "2";
+
+        let dau = zalo_core::thoigian::luc_nay().dau_thoi_gian();
+        let thu_muc = Path::new(&dich).join(&dau);
+        let r = match zalo_core::act::sao_luu(&ds, &goc, &thu_muc, toan_bo) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("  Không sao lưu được: {e}");
+                return Some(());
+            }
+        };
+        let _ = zalo_core::act::ghi_loai_quet(&thu_muc, &self.loai_quet);
+        self.nho_goc_sao_luu(&dich);
+
+        if r.het_cho {
+            println!();
+            println!("  Ổ đích hết chỗ giữa chừng. Đã dừng ngay tại tệp đó.");
+            println!(
+                "  Chép được {}/{} tệp trước khi hết chỗ.",
+                hien::so(r.da_chep as i64),
+                hien::so(r.tong as i64)
+            );
+            println!("  Bản sao lưu này KHÔNG trọn vẹn nên không mở đường xóa.");
+        }
+
+        self.sao_luu_gan_nhat = Some(SaoLuuGanNhat {
+            dau_quet: self.dau_quet.clone(),
+            thu_muc: thu_muc.to_string_lossy().to_string(),
+            tong: r.tong,
+            da_chep: r.da_chep,
+            chep_hong: r.chep_hong,
+            xac_minh_hong: r.xac_minh_hong,
+            het_cho: r.het_cho,
+        });
+
+        println!();
+        println!("  Đã chép   : {} tệp", hien::so(r.da_chep as i64));
+        // Nói đúng ĐỘ PHỦ, đừng gộp thành một chữ "đã xác minh": kích thước được
+        // đối chiếu cho 100% số tệp đã chép, còn SHA-256 thì chỉ cho phần đã băm.
+        println!(
+            "  Xác minh  : kích thước {}/{} tệp · SHA256 {}/{} tệp",
+            hien::so(r.da_chep as i64),
+            hien::so(r.da_chep as i64),
+            hien::so(r.da_xac_minh as i64),
+            hien::so(r.da_chep as i64)
+        );
+        println!("  Vị trí    : {}", thu_muc.display());
+
+        if r.chep_hong > 0 || r.xac_minh_hong > 0 || r.het_cho || r.da_chep != r.tong {
+            let lf = self.thu_muc_nhat_ky().join(format!("saoluu_loi_{dau}.txt"));
+            let _ = std::fs::create_dir_all(self.thu_muc_nhat_ky());
+            let _ = std::fs::write(&lf, r.nhat_ky_loi.join("\r\n"));
+            println!();
+            if r.chep_hong > 0 {
+                println!("  Chép lỗi     : {} tệp", hien::so(r.chep_hong as i64));
+            }
+            if r.xac_minh_hong > 0 {
+                println!("  Xác minh lỗi : {} tệp", hien::so(r.xac_minh_hong as i64));
+            }
+            if r.da_chep != r.tong {
+                println!(
+                    "  Thiếu        : {}/{} tệp chưa được chép",
+                    hien::so((r.tong - r.da_chep) as i64),
+                    hien::so(r.tong as i64)
+                );
+            }
+            println!("  Bước xóa sẽ bị chặn cho đến khi sao lưu lại sạch.");
+            println!("  Chi tiết: {}", lf.display());
+        } else if toan_bo {
+            println!("  Sao lưu sạch — đã đối chiếu SHA256 toàn bộ. Đã mở khóa bước xóa.");
+        } else {
+            println!(
+                "  Sao lưu sạch ở mức đã kiểm: kích thước 100%, SHA256 {}/{} tệp.",
+                hien::so(r.da_xac_minh as i64),
+                hien::so(r.da_chep as i64)
+            );
+            println!("  Phần chưa băm có thể hỏng nội dung mà kích thước vẫn đúng.");
+            println!("  Đã mở khóa bước xóa.");
+        }
+        Some(())
+    }
+
+    /// Nhớ thư mục sao lưu để lần sau khỏi phải nhớ đường dẫn.
+    fn nho_goc_sao_luu(&mut self, dich: &str) {
+        if dich.trim().is_empty() || self.cai_dat.goc_sao_luu.iter().any(|x| x == dich) {
+            return;
+        }
+        self.cai_dat.goc_sao_luu.push(dich.to_string());
+        let _ = zalo_core::store::ghi_cai_dat(
+            &sysinfo::thu_muc_cong_cu().join("settings.json"),
+            &self.cai_dat,
+        );
+    }
+}
+
+/// Đếm trước một lượt khôi phục sẽ ghi bao nhiêu tệp, bỏ qua bao nhiêu, và cần
+/// bao nhiêu byte.
+///
+/// Tệp đã tồn tại mà có ghi đè thì chỉ cần thêm **phần chênh lệch**, không phải
+/// cả cỡ tệp — đòi dư chỗ là từ chối một lượt khôi phục hoàn toàn làm được.
+/// Chừa 2% cộng 50 MB cho siêu dữ liệu hệ tệp.
+fn do_cho_khoi_phuc(thu_muc_sao_luu: &Path, dich: &str, ghi_de: bool) -> (usize, usize, i64) {
+    let goc = thu_muc_sao_luu.to_string_lossy().to_string();
+    let mut se_ghi = 0usize;
+    let mut bo_qua = 0usize;
+    let mut can: i64 = 0;
+    for t in zalo_core::walk::duyet(thu_muc_sao_luu).tep {
+        let s = t.duong_dan.to_string_lossy().to_string();
+        if t.duong_dan
+            .file_name()
+            .map(|n| n == zalo_core::store::TEN_BAN_KE)
+            == Some(true)
+        {
+            continue;
+        }
+        let dst = Path::new(dich).join(duong_dan_tuong_doi(&s, &goc));
+        match std::fs::metadata(&dst) {
+            Ok(md) => {
+                if !ghi_de {
+                    bo_qua += 1;
+                    continue;
+                }
+                let them = t.co as i64 - md.len() as i64;
+                if them > 0 {
+                    can += them;
+                }
+                se_ghi += 1;
+            }
+            Err(_) => {
+                can += t.co as i64;
+                se_ghi += 1;
+            }
+        }
+    }
+    (
+        (se_ghi),
+        bo_qua,
+        (can as f64 * 1.02) as i64 + 50 * 1024 * 1024,
+    )
+}
+
+/// Gắn bản giữ lại vào một ứng viên đã xác minh là trùng.
+///
+/// Bản giữ lại đi theo tệp tới tận lúc xóa, vì đó là thứ
+/// [`zalo_core::gate::ban_giu_lai_con_song`] kiểm lại ngay trước khi hạ tay.
+fn gan_ban_giu_lai(c: &TepQuet, giu: &str) -> TepQuet {
+    TepQuet {
+        duong_dan: c.duong_dan.clone(),
+        co: c.co,
+        giu_lai: giu.to_string(),
     }
 }
 

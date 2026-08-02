@@ -125,6 +125,63 @@ pub fn ngay_dia_phuong(t: SystemTime) -> Ngay {
     lich_tu_ngay(giay.div_euclid(86_400))
 }
 
+/// Một thời điểm đầy đủ theo giờ địa phương.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LucNay {
+    pub ngay: Ngay,
+    pub gio: u32,
+    pub phut: u32,
+    pub giay: u32,
+}
+
+impl LucNay {
+    /// `dd/MM/yyyy HH:mm:ss` — dạng bản PowerShell ghi vào đầu mỗi nhật ký.
+    pub fn dinh_dang(self) -> String {
+        format!(
+            "{} {:02}:{:02}:{:02}",
+            self.ngay.dinh_dang(),
+            self.gio,
+            self.phut,
+            self.giay
+        )
+    }
+
+    /// `yyyyMMdd_HHmmss` — dạng đặt tên tệp nhật ký và thư mục sao lưu.
+    ///
+    /// Đây là **hợp đồng giữa hai bản**: bản sao lưu do bản này tạo phải nằm
+    /// đúng chỗ mà bản kia đi tìm, và ngược lại.
+    pub fn dau_thoi_gian(self) -> String {
+        format!(
+            "{:04}{:02}{:02}_{:02}{:02}{:02}",
+            self.ngay.nam, self.ngay.thang, self.ngay.ngay, self.gio, self.phut, self.giay
+        )
+    }
+
+    /// `yyyy-MM-dd HH:mm:ss` — dạng trường `Created` trong bản kê sao lưu.
+    ///
+    /// Khác hai dạng trên, và **cố ý** khác: bản PowerShell ghi trường ấy bằng
+    /// đúng dạng này. Đổi đi là bản kê do hai bản tạo ra không còn sắp xếp lẫn
+    /// nhau được nữa.
+    pub fn dang_ban_ke(self) -> String {
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            self.ngay.nam, self.ngay.thang, self.ngay.ngay, self.gio, self.phut, self.giay
+        )
+    }
+}
+
+/// Bây giờ, theo giờ địa phương.
+pub fn luc_nay() -> LucNay {
+    let giay = giay_tu_moc(SystemTime::now()) + crate::sysinfo::lech_gio_dia_phuong();
+    let trong_ngay = giay.rem_euclid(86_400);
+    LucNay {
+        ngay: lich_tu_ngay(giay.div_euclid(86_400)),
+        gio: (trong_ngay / 3600) as u32,
+        phut: ((trong_ngay % 3600) / 60) as u32,
+        giay: (trong_ngay % 60) as u32,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,6 +291,32 @@ mod tests {
             .dinh_dang(),
             "20/11/2025"
         );
+    }
+
+    #[test]
+    fn ba_dang_thoi_gian_khong_duoc_lan_nhau() {
+        let l = LucNay {
+            ngay: Ngay {
+                nam: 2026,
+                thang: 8,
+                ngay: 2,
+            },
+            gio: 9,
+            phut: 5,
+            giay: 30,
+        };
+        assert_eq!(l.dinh_dang(), "02/08/2026 09:05:30");
+        assert_eq!(l.dau_thoi_gian(), "20260802_090530");
+        assert_eq!(l.dang_ban_ke(), "2026-08-02 09:05:30");
+    }
+
+    #[test]
+    fn luc_nay_co_gio_phut_giay_hop_le() {
+        let l = luc_nay();
+        assert!(l.gio < 24, "giờ lạ: {}", l.gio);
+        assert!(l.phut < 60);
+        assert!(l.giay < 60);
+        assert_eq!(l.ngay, hom_nay(), "ngày của luc_nay phải khớp hom_nay");
     }
 
     #[test]

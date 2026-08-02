@@ -1,17 +1,16 @@
 # Bản Rust
 
 Đã qua **M0** (khung sườn + cổng kiến trúc), **M1** (lõi an toàn), **M2** (duyệt
-cây, băm, bộ lọc quét) và **M3** (vỏ dòng lệnh).
+cây, băm, bộ lọc quét), **M3** (vỏ dòng lệnh) và **M4** (xóa · sao lưu · khôi phục).
 
-Tiếp theo là **M4** — xóa, sao lưu, khôi phục. Đây là mốc nguy hiểm nhất của cả
-kế hoạch: port sai ở đó là mất dữ liệu thật, không phải chạy chậm.
+Tiếp theo là **M5** — giao diện đồ họa.
 
 Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-hoach-port.md`](../docs/ke-hoach-port.md).
 
-> **Chưa dùng được để dọn dẹp.** `zalo-cli` quét và báo cáo được, nhưng **chưa
-> biết xóa, sao lưu hay khôi phục** — tới những chỗ đó nó đi hết đường hỏi rồi
-> dừng lại và nói thẳng là chưa làm. `zalo-gui` vẫn là vỏ rỗng. Công cụ thật
-> đang chạy vẫn là bản PowerShell ở thư mục gốc.
+> **`zalo-cli` đã dọn dẹp được thật.** Nó quét, sao lưu, xóa và khôi phục — cùng
+> một bộ test lái được cả nó lẫn bản PowerShell và cho cùng kết quả. `zalo-gui`
+> vẫn là vỏ rỗng, nên bản dành cho người dùng thường vẫn là bản PowerShell ở
+> thư mục gốc.
 
 ---
 
@@ -31,8 +30,8 @@ Dự phóng lúc lập kế hoạch: lõi **36 crate**, cộng `eframe` thành *
 
 | Crate | Là gì | Mốc | Trạng thái |
 |:---|:---|:---|:---|
-| `zalo-core` | Lõi: quyết định xóa gì, và chặn cái gì | M1–M4 | `protect` `confirm` `gate` `contract` `walk` `hash` `scan` `sysinfo` `store` `thoigian` **đã có**; `act` và `lock` còn là vỏ rỗng |
-| `zalo-cli` | Vỏ dòng lệnh, nói đúng giao thức phím của bản PowerShell | M3 | **đã có** phần chỉ đọc |
+| `zalo-core` | Lõi: quyết định xóa gì, và chặn cái gì | M1–M4 | tất cả **đã có** trừ `lock` |
+| `zalo-cli` | Vỏ dòng lệnh, nói đúng giao thức phím của bản PowerShell | M3–M4 | **đã có** |
 | `zalo-gui` | Vỏ đồ họa egui, **không chứa quyết định xóa** | M5 | vỏ rỗng |
 
 ## Bộ đối chiếu song song — thứ chứng minh hai bản còn khớp
@@ -60,7 +59,7 @@ Ngoài đối chiếu ở trên, hai cổng còn lại:
 
 **Tốc độ.** `cargo run --release --example do_toc_do -p zalo-core` quét cây thật: **0,507 s** so với ngưỡng 1,5 s, tức nhanh hơn bản PowerShell **10,2 lần**. Cố ý để ở dạng `example` chứ không phải `#[test]` — ghim một ngưỡng giây vào bộ test trên máy chủ CI là mời một phép thử chập chờn, mà phép thử chập chờn thì sớm muộn cũng bị tắt đi, kéo theo cả những phép thử thật nằm cạnh.
 
-## Cổng M3 đã đạt — một bộ test, hai công cụ
+## Cổng đối chiếu — một bộ test, hai công cụ
 
 `ZaloCleanup.Tests.ps1` giờ lái được **cả hai bản**. Không có bản test thứ hai: chép ra làm hai bản là hai bộ test trôi khỏi nhau, và lúc đó "cả hai đều xanh" chẳng chứng minh được gì về hai công cụ.
 
@@ -68,18 +67,28 @@ Ngoài đối chiếu ở trên, hai cổng còn lại:
 
 | | |
 |:---|---:|
-| Phép thử đầu-cuối | **67** |
-| Trong phạm vi cổng M3 (không xóa tệp) | **28** |
-| Đạt | **28** |
-| Chờ mốc M4 (có xóa · sao lưu · khôi phục) | 39 |
+| Phép thử đầu-cuối, kể cả `-Full` | **67** |
+| Đạt khi lái bản Rust | **67** |
+| Phép thử liên thông hai chiều | **19/19** |
 
-Bộ chạy [`tools/cong-m3.ps1`](tools/cong-m3.ps1) tự in cả phần **xanh vô nghĩa** — những phép thử đạt chỉ vì bản Rust chưa biết xóa. Giấu chúng đi là tự lừa mình ở đúng chỗ nguy hiểm nhất.
+Bộ chạy [`tools/cong-song-song.ps1`](tools/cong-song-song.ps1) tách riêng 135 phép thử **soi mã nguồn PowerShell** ra khỏi con số: chúng luôn xanh bất kể bản Rust đúng hay sai, nên gộp vào là tự thổi phồng bằng chứng.
 
-### Đột biến tìm ra hai lỗ mà chính cổng này không bịt được
+Bộ test chạy mỗi bản một mình thì chứng minh được hai bản làm **đúng**, nhưng không chứng minh được chúng **đọc được của nhau**. Đó là việc của [`tools/cong-lien-thong.ps1`](tools/cong-lien-thong.ps1): sao lưu bằng bản này, khôi phục bằng bản kia, rồi so **SHA-256 từng tệp** — không so số lượng, vì số lượng khớp mà nội dung hỏng là đúng loại lỗi mà một bản sao lưu sinh ra để chống.
 
-Cổng đạt ngay lượt đầu, nên phải thử phá. Năm đột biến, **ba trong số đó cổng vẫn xanh**: nhập sai mà âm thầm chọn tất cả, gỡ hẳn chốt vùng bảo vệ khỏi vòng quét, và hạ mức xác nhận của dữ liệu thật. Lý do đều là phép thử đầu-cuối tương ứng chỉ kiểm **câu chữ in ra**, hoặc nằm trong lượt có xóa tệp nên thuộc M4.
+### Đột biến tìm ra những lỗ mà chính cổng này không bịt được
 
-Đã bịt bằng ba hàm thuần có phép thử riêng — `phan_tich_chon_thu_muc`, `xet_tep`, `muc_xac_nhan`. Đo lại: cả năm đột biến đều đỏ.
+Cổng đạt ngay lượt đầu, cả ở M3 lẫn M4 — con số đó phải nghi ngờ chứ không mừng. Mười ba đột biến qua hai mốc, và **bốn trong số đó không bị bắt**:
+
+| Đột biến | Vì sao cổng để lọt |
+|:---|:---|
+| Nhập sai thì âm thầm chọn tất cả | phép thử chỉ kiểm **câu chữ in ra**, không kiểm bộ lọc |
+| Gỡ chốt vùng bảo vệ khỏi vòng quét | phép thử tương ứng nằm trong lượt **có xóa tệp** |
+| Bản trùng lặp bị đòi gõ `XÓA` như dữ liệu thật | như trên |
+| Dọn thư mục rỗng bằng xóa **đệ quy** | mọi thư mục đưa tới đó **đã rỗng sẵn**, hai hàm cho cùng kết quả |
+
+Cái cuối là ví dụ đẹp nhất: khe hở thật nằm giữa lúc kết luận "thư mục này rỗng" và lúc hạ tay, mà bộ test không dựng lại được khe ấy. Bịt bằng cách tách ra `xoa_thu_muc_neu_rong` rồi hỏi thẳng — *đưa cho nó một thư mục CÓ tệp thì sao?*
+
+Bốn lỗ đều đã bịt bằng hàm thuần có phép thử riêng: `phan_tich_chon_thu_muc`, `xet_tep`, `muc_xac_nhan`, `xoa_thu_muc_neu_rong`. Đo lại: **cả mười ba đột biến đều đỏ.**
 
 ---
 
@@ -93,10 +102,11 @@ cargo fmt --all --check
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\check-deps.ps1
 ```
 
-Cổng M3 chạy từ gốc repo, và tự dựng lại exe:
+Hai cổng đối chiếu chạy từ gốc repo, và tự dựng lại exe:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-m3.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-song-song.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-lien-thong.ps1
 ```
 
 ---
@@ -113,4 +123,4 @@ Mỗi tệp mở đầu bằng khối chú thích ghi rõ **ràng buộc phải 
 
 Công cụ này **xóa vĩnh viễn dữ liệu cá nhân, không qua Thùng rác**. Chủ dự án đã dùng nó xóa 149.309 tệp / 37 GB ảnh và video thật.
 
-Sửa một lớp an toàn thì phải **kiểm bằng đột biến**: cố tình phá rồi xem test có đỏ không. Test không đỏ nghĩa là test vô dụng, không phải mã đúng — chuyện đó đã xảy ra **năm lần** trong dự án này, gần nhất là ở chính mốc M2: gỡ hẳn chốt reparse point mà bộ test vẫn xanh, vì có một lớp phòng thủ thứ hai che mất.
+Sửa một lớp an toàn thì phải **kiểm bằng đột biến**: cố tình phá rồi xem test có đỏ không. Test không đỏ nghĩa là test vô dụng, không phải mã đúng — chuyện đó đã xảy ra **bảy lần** trong dự án này. Gần nhất ở mốc M4: đổi `remove_dir` thành `remove_dir_all` trong vòng dọn thư mục rỗng mà không phép thử nào đỏ, vì mọi thư mục đưa tới đó đều đã rỗng sẵn nên hai hàm cho cùng kết quả.

@@ -87,6 +87,72 @@ extern "system" {
         lpsz_short_path: *mut u16,
         cch_buffer: u32,
     ) -> u32;
+    fn CreateToolhelp32Snapshot(dw_flags: u32, th32_process_id: u32) -> isize;
+    fn Process32FirstW(h_snapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
+    fn Process32NextW(h_snapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
+    fn CloseHandle(h_object: isize) -> i32;
+}
+
+#[cfg(windows)]
+#[repr(C)]
+struct ProcessEntry32W {
+    dw_size: u32,
+    cnt_usage: u32,
+    th32_process_id: u32,
+    th32_default_heap_id: usize,
+    th32_module_id: u32,
+    cnt_threads: u32,
+    th32_parent_process_id: u32,
+    pc_pri_class_base: i32,
+    dw_flags: u32,
+    sz_exe_file: [u16; 260],
+}
+
+/// Tên các tiến trình đang chạy có tên bắt đầu bằng `tien_to`, không phân biệt
+/// hoa thường. Tương ứng `Get-Process -Name 'Zalo*'`.
+///
+/// # Chỉ để DÒ, không để giết
+///
+/// Bản PowerShell hỏi rồi tự đóng Zalo. Bản này **chỉ báo và dừng lại**, để
+/// người dùng tự đóng. Đây là khác biệt cố ý, không phải thiếu sót:
+///
+/// - Giết một ứng dụng nhắn tin đang chạy có thể làm mất tin nhắn chưa gửi.
+/// - Nhánh ấy **không có phép thử nào canh** — bộ test đầu-cuối dựng sandbox
+///   trong `%TEMP%` nên không bao giờ chạm tới nó. Viết mã hủy tiến trình mà
+///   không có phép thử là đúng thứ dự án này đã thề không làm.
+///
+/// Ghi ra đây thay vì để lặng lẽ khác nhau.
+pub fn tien_trinh_dang_chay(tien_to: &str) -> Vec<String> {
+    let mut ra = Vec::new();
+    #[cfg(windows)]
+    {
+        const TH32CS_SNAPPROCESS: u32 = 2;
+        // SAFETY: cả ba lời gọi đều theo đúng giao kèo của Toolhelp32 — chụp
+        // xong thì lặp, và đóng thẻ trong mọi đường ra.
+        unsafe {
+            let h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if h == -1 {
+                return ra;
+            }
+            let mut e: ProcessEntry32W = std::mem::zeroed();
+            e.dw_size = std::mem::size_of::<ProcessEntry32W>() as u32;
+            let mut co = Process32FirstW(h, &mut e);
+            while co != 0 {
+                let n = e.sz_exe_file.iter().position(|&c| c == 0).unwrap_or(260);
+                let ten = String::from_utf16_lossy(&e.sz_exe_file[..n]);
+                if ten.to_lowercase().starts_with(&tien_to.to_lowercase()) {
+                    ra.push(ten);
+                }
+                co = Process32NextW(h, &mut e);
+            }
+            CloseHandle(h);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = tien_to;
+    }
+    ra
 }
 
 /// Dạng ngắn 8.3 của một đường dẫn, ví dụ `C:\Users\RUNNE~1`.
@@ -269,6 +335,19 @@ mod tests {
     fn o_he_thong_co_dung_luong_trong_duong() {
         let n = byte_trong(&goc_he_thong());
         assert!(n > 0, "ổ hệ thống phải báo được dung lượng trống, nhận {n}");
+    }
+
+    /// Không có tiến trình nào tên như vậy thì phải trả danh sách rỗng, và
+    /// **luôn** thấy được chính mình khi hỏi đúng tên.
+    #[cfg(windows)]
+    #[test]
+    fn do_duoc_tien_trinh_dang_chay() {
+        assert!(tien_trinh_dang_chay("khong_he_co_ten_nay_zzz").is_empty());
+        // Tiến trình chạy phép thử này luôn tồn tại, dù tên đuôi có đổi.
+        let ta = tien_trinh_dang_chay("zalo_core");
+        let bat_ky = tien_trinh_dang_chay("");
+        assert!(!bat_ky.is_empty(), "không dò được tiến trình nào cả");
+        let _ = ta;
     }
 
     #[cfg(windows)]

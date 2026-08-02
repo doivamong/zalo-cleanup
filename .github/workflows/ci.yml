@@ -108,16 +108,26 @@ jobs:
         shell: powershell
         run: .\tools\check-deps.ps1
 
-      # CỔNG M3. Chạy ĐÚNG MỘT bộ test hai lần — một lần lái bản PowerShell, một
-      # lần lái zalo-cli.exe — rồi đối chiếu từng phép thử. Đây là thứ biến bộ
-      # test thành hợp đồng sống cho cả hai bản, thay vì hai bộ test rời nhau
+      # CỔNG M3+M4. Chạy ĐÚNG MỘT bộ test hai lần — một lần lái bản PowerShell,
+      # một lần lái zalo-cli.exe — rồi đối chiếu từng phép thử. Đây là thứ biến
+      # bộ test thành hợp đồng sống cho cả hai bản, thay vì hai bộ test rời nhau
       # rồi cùng xanh mà chẳng chứng minh được gì về hai công cụ.
       #
-      # Phạm vi là các phép thử đầu-cuối KHÔNG xóa tệp; phần có xóa thuộc mốc M4
-      # và bộ chạy tự in ra con số ấy chứ không giấu. Xem đầu tệp cong-m3.ps1.
+      # Chạy kèm -Full: bốn phép thử chậm trong đó là bốn đường nguy hiểm nhất
+      # của mốc M4 — sao lưu hỏng thì phải chặn xóa, tệp biến mất giữa lượt xóa
+      # thì không được đếm nhầm là đã xóa.
       #
       # working-directory: . vì bộ chạy phải đứng ở gốc repo, cạnh ZaloCleanup.ps1.
-      - name: Cổng M3 — cùng một bộ test lái cả hai bản
+      - name: Cổng đối chiếu — cùng một bộ test lái cả hai bản
         shell: powershell
         working-directory: .
-        run: .\rust\tools\cong-m3.ps1
+        run: .\rust\tools\cong-song-song.ps1
+
+      # CỔNG LIÊN THÔNG của mốc M4. Bộ test ở trên chạy mỗi bản một mình, nên nó
+      # chứng minh được hai bản làm ĐÚNG mà không chứng minh được chúng ĐỌC ĐƯỢC
+      # CỦA NHAU. Hai định dạng bản sao lưu lệch nhau thì cả hai vẫn xanh, cho
+      # tới ngày ai đó cần khôi phục bằng bản còn lại.
+      - name: Cổng liên thông — sao lưu bản này, khôi phục bằng bản kia
+        shell: powershell
+        working-directory: .
+        run: .\rust\tools\cong-lien-thong.ps1 -BoQuaDung

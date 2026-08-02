@@ -41,6 +41,13 @@ jobs:
           # người dựng lại biết mình cần đúng bản nào.
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationVersion
           Write-Host "  Visual Studio $vs"
+          # Bộ công cụ MSVC là ĐẦU VÀO của bản build, y như phiên bản rustc.
+          # Không ghi lại nó thì người dựng lại không biết mình cần bản nào, và
+          # "mã băm khớp" trở thành chuyện may rủi.
+          $p = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          Write-Host "  Bộ công cụ MSVC có sẵn trên máy chủ này:"
+          Get-ChildItem "$p\VC\Tools\MSVC" -Directory -EA SilentlyContinue |
+            Sort-Object Name | ForEach-Object { Write-Host "    $($_.Name)" }
 
       - name: Dựng
         shell: powershell

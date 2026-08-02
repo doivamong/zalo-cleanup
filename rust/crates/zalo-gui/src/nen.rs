@@ -30,6 +30,8 @@ pub enum Tin {
     XoaXong(Box<KetQuaXoa>, usize),
     SaoLuuXong(Box<KetQuaSaoLuuChiTiet>, String),
     KhoiPhucXong(Box<KetQuaKhoiPhuc>),
+    /// Mười hai ảnh xem trước đã giải mã xong ở luồng nền.
+    AnhXong(Vec<crate::anh::O>),
     Hong(String),
 }
 

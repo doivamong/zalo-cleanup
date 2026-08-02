@@ -133,7 +133,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
-| **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **2,64 MiB** · **39** phép thử giao diện · còn **10 mục mức 1** cần người thật và **3 việc chưa làm** |
+| **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **3,61 MiB** · **60** phép thử giao diện · ba việc còn nợ **đã làm xong** · còn **10 mục mức 1** cần người thật |
 | **M6** Phát hành | ⬜ chưa | Chặn bởi `P2-1`, ngân sách ký số |
 
 ## M0 · Khung sườn — ✅ đạt
@@ -289,12 +289,12 @@ Theo `ui-ux-council.md`.
 
 | | |
 |:---|---:|
-| Phép thử đơn vị của giao diện | **39** |
-| Tổng phép thử đơn vị (lõi + vỏ) | **127** |
-| Kích thước `zalo-gui.exe` | **2,64 MiB** |
-| Crate riêng cho giao diện | **112** |
+| Phép thử đơn vị của giao diện | **60** |
+| Tổng phép thử đơn vị (lõi + vỏ) | **149** |
+| Kích thước `zalo-gui.exe` | **3,61 MiB** (kể cả phông nhúng 756 KB và bộ giải mã JPEG XL) |
+| Crate riêng cho giao diện | **128** |
 
-Exe **nhỏ hơn** dự phóng 2,86 MiB của hội đồng, dù đã nhúng sẵn phông 756 KB. Cổng kiến trúc M0 vẫn xanh: lõi 17 crate, không dính một dòng giao diện nào.
+Cổng kiến trúc M0 vẫn xanh: lõi 17 crate, không dính một dòng giao diện nào. Trước khi thêm bộ giải mã JPEG XL, exe là **2,64 MiB** — nhỏ hơn dự phóng 2,86 MiB của hội đồng.
 
 ### Ma sát được dựng lại thành ba mô-đun THUẦN, không nằm trong mã vẽ
 
@@ -320,7 +320,25 @@ Bộ chạy [`rust/tools/cong-m5.ps1`](../rust/tools/cong-m5.ps1) **in thẳng t
 
 `§8.1-1` giữ Enter/Space/chuột · `§8.1-2` ảnh greyscale 3 người thử · `§8.1-3` gõ `XOÁ` bằng Unikey · `BP-01` chỉ dùng bàn phím · `BP-04` giam tiêu điểm · `DPI-04` màn 1366×768 · `DPI-08` canh giữa cửa sổ cha · `MAU-01` · `MAU-09` · `ĐM-08`.
 
-### Ba việc M5 chưa làm, nói thẳng
+### Ba việc từng nợ, giờ đã làm xong
+
+| Việc | Kết quả |
+|:---|:---|
+| **Bộ giải mã JPEG XL** | Đã có. `.jxl` chiếm **46,4%** dữ liệu Zalo thật, và phép thử giải mã **tệp `.jxl` thật của Zalo** chứ không phải tệp dựng máy móc. Giá: exe từ 2,64 lên **3,61 MiB**, thêm 16 crate |
+| **Màn sao lưu và khôi phục** | Đã có, chạy ngoài luồng vẽ. Chốt sao lưu sạch gọi thẳng `gate::sao_luu_sach` của lõi chứ không viết lại |
+| **`ĐM-08`** | Đã có. Dải thông báo hiện trên **mọi** màn hình, dò lại theo nhịp vì người dùng có thể bật trình đọc màn hình giữa chừng |
+
+Kèm theo, ảnh xem trước thật: mười hai ảnh lấy ngẫu nhiên, giải mã ngoài luồng vẽ, nhận dạng bằng magic byte. Tệp không xem trước được hiện ô `?` và **vẫn nằm trong danh sách** — giấu đi là người dùng xóa một thứ họ chưa từng nhìn thấy mà lại tưởng đã xem hết.
+
+### Một lỗ nữa, chỉ lộ ra khi chạy thật
+
+Màn hình hiện `? Xong.` thay vì `✓ Xong.`. Đo tận nơi: **Segoe UI phủ đủ 134 chữ cái tiếng Việt nhưng thiếu bốn trên tám ký hiệu** của bảng — `⊘ ⚠ ✓ ✖`.
+
+Phép thử phủ glyph của tôi chỉ hỏi **phông nhúng**, không hỏi phông hệ thống đang thật sự dùng, nên nó xanh trong khi màn hình hỏng. Sửa bằng **chuỗi phông**: hệ thống cho chữ, phông nhúng lấp glyph thiếu. Phép thử mới hỏi **cả chuỗi gộp lại** chứ không hỏi từng phông một.
+
+Đây là lần thứ ba trong mốc M5 một chốt an toàn hóa ra chưa từng được chứng minh — và là lần duy nhất phải mở ứng dụng lên mới thấy.
+
+### Việc M5 còn lại, nói thẳng
 
 | Việc | Hậu quả đo được |
 |:---|:---|
@@ -328,7 +346,7 @@ Bộ chạy [`rust/tools/cong-m5.ps1`](../rust/tools/cong-m5.ps1) **in thẳng t
 | **Chưa có màn sao lưu và khôi phục trong giao diện** | Hai việc đó vẫn phải làm bằng bản dòng lệnh hoặc bản PowerShell |
 | **`ĐM-08` chưa cài** | Bật trình đọc màn hình chưa hiện dải thông báo và nút mở bản dòng lệnh. Đây là mục MỨC 1 |
 
-Cả ba đều là việc còn lại của M5, không phải việc của M6.
+Đây là thứ duy nhất còn chặn M5, và nó chặn bằng người chứ không bằng mã.
 
 ## M6 · Phát hành
 

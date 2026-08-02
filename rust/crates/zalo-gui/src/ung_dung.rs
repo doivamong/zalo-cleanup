@@ -11,6 +11,7 @@
 //!                                 ▲ chốt xem trước   ▲ chốt cụm từ + khóa mồi
 //! ```
 
+use crate::duong_lui::DuongLui;
 use crate::muc_rui_ro::MucRuiRo;
 use crate::nen::{Tin, ViecNen};
 use crate::phong::{bieu_tuong, NguonPhong};
@@ -46,6 +47,8 @@ enum ManHinh {
     DangLam,
     KetQua,
     VungBaoVe,
+    SaoLuu,
+    KhoiPhuc,
 }
 
 /// Kết quả quét đang giữ, cùng chốt xem trước của riêng nó.
@@ -88,11 +91,46 @@ pub struct UngDung {
     /// không chỉ im lặng không làm gì.
     chan_vi: Option<String>,
     truoc_do: std::time::Instant,
+    /// `ĐM-08`. Dò một lần lúc mở, rồi dò lại theo nhịp — người dùng có thể bật
+    /// trình đọc màn hình **giữa chừng**, và lúc đó họ càng cần đường lui.
+    duong_lui: DuongLui,
+    lan_do_duong_lui: std::time::Instant,
+
+    /// Thư mục đích người dùng gõ vào ở màn sao lưu.
+    dich_sao_luu: String,
+    /// Xác minh SHA-256 **toàn bộ** thay vì mẫu 50 tệp.
+    xac_minh_toan_bo: bool,
+    /// Bản sao lưu vừa tạo cho đúng lượt quét đang giữ.
+    sao_luu_gan_nhat: Option<zalo_core::gate::KetQuaSaoLuu>,
+    /// Các bản sao lưu tìm được ở màn khôi phục.
+    ds_sao_luu: Vec<zalo_core::store::BoSaoLuu>,
+    /// Khôi phục có ghi đè tệp đã tồn tại không. Mặc định **không** — đè mất bản
+    /// đang dùng là hỏng theo chiều ngược lại với chiều người dùng đang lo.
+    ghi_de_khi_khoi_phuc: bool,
+
+    /// Mười hai ô xem trước của lượt quét đang giữ.
+    o_anh: Vec<crate::anh::O>,
+    anh_dang_giai_ma: bool,
+    /// Luồng giải mã ảnh, TÁCH RIÊNG khỏi `viec`.
+    ///
+    /// Dùng chung một chỗ thì mở danh sách xem trước sẽ đá văng việc nền đang
+    /// chạy — và việc nền đang chạy có thể là một lượt xóa.
+    viec_anh: Option<ViecNen>,
+    /// Kết cấu đã nạp vào egui, giữ lại để khỏi nạp lại mỗi khung.
+    ket_cau: Vec<Option<egui::TextureHandle>>,
 }
 
 impl UngDung {
-    pub fn moi(nguon_phong: NguonPhong) -> Self {
-        let goc = tim_goc_zalo().unwrap_or_default();
+    /// `goc_chi_dinh` là tham số `-Root`, giống hệt bản dòng lệnh.
+    ///
+    /// Không phải cờ dành cho lập trình viên: máy nào có nhiều tài khoản Zalo,
+    /// hoặc có bố cục thư mục lạ, thì phép tự dò chọn nhầm — và một công cụ xóa
+    /// dữ liệu chọn nhầm thư mục là chuyện không được để người dùng chịu.
+    pub fn moi(nguon_phong: NguonPhong, goc_chi_dinh: Option<String>) -> Self {
+        let goc = goc_chi_dinh
+            .filter(|g| !g.trim().is_empty())
+            .or_else(tim_goc_zalo)
+            .unwrap_or_default();
         let goc_du_lieu = Path::new(&goc)
             .parent()
             .and_then(|p| p.parent())
@@ -117,13 +155,45 @@ impl UngDung {
             loi: None,
             chan_vi: None,
             truoc_do: std::time::Instant::now(),
+            duong_lui: DuongLui::do_hien_tai(),
+            lan_do_duong_lui: std::time::Instant::now(),
+            dich_sao_luu: String::new(),
+            xac_minh_toan_bo: false,
+            sao_luu_gan_nhat: None,
+            ds_sao_luu: Vec::new(),
+            ghi_de_khi_khoi_phuc: false,
+            o_anh: Vec::new(),
+            anh_dang_giai_ma: false,
+            viec_anh: None,
+            ket_cau: Vec::new(),
         }
     }
 
+    /// Bản sao lưu hiện có đúng là của kết quả quét đang giữ, và **sạch**.
+    ///
+    /// Gọi thẳng [`zalo_core::gate::sao_luu_sach`] — không viết lại phép kiểm ở
+    /// đây. Chép một chốt an toàn ra chỗ thứ hai là mời hai chỗ trôi khỏi nhau,
+    /// và chỗ trôi sẽ đúng là chỗ không có phép thử nào canh.
+    fn sao_luu_sach(&self) -> bool {
+        let dau = match &self.quet {
+            Some(q) => q.dau_quet.clone(),
+            None => return false,
+        };
+        zalo_core::gate::sao_luu_sach(self.sao_luu_gan_nhat.as_ref(), &dau)
+    }
+
     /// Nguyên tắc bất biến số 2 và chốt xem trước, gộp một chỗ.
+    ///
+    /// Bỏ luôn bản sao lưu gần nhất: giữ nó lại nghĩa là một bản sao lưu của
+    /// **kết quả quét cũ** vẫn mở khóa được bước xóa cho kết quả quét mới, tức
+    /// xóa những tệp chưa từng được sao lưu.
     fn bo_ket_qua_quet(&mut self) {
         self.quet = None;
         self.xn = None;
+        self.sao_luu_gan_nhat = None;
+        self.o_anh.clear();
+        self.ket_cau.clear();
+        self.anh_dang_giai_ma = false;
     }
 }
 
@@ -132,6 +202,7 @@ impl UngDung {
 impl eframe::App for UngDung {
     fn update(&mut self, ctx: &egui::Context, _f: &mut eframe::Frame) {
         self.thu_tin(ctx);
+        self.ve_dai_duong_lui(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| match self.man {
                 ManHinh::TrangChu => self.ve_trang_chu(ui),
@@ -142,6 +213,8 @@ impl eframe::App for UngDung {
                 ManHinh::DangLam => self.ve_dang_lam(ui, ctx),
                 ManHinh::KetQua => self.ve_ket_qua(ui),
                 ManHinh::VungBaoVe => self.ve_vung_bao_ve(ui),
+                ManHinh::SaoLuu => self.ve_sao_luu(ui),
+                ManHinh::KhoiPhuc => self.ve_khoi_phuc(ui),
             });
         });
     }
@@ -162,7 +235,21 @@ impl UngDung {
                 hop.push(t);
             }
         }
-        if !hop.is_empty() || self.viec.is_some() {
+        // Luồng ảnh chạy song song với luồng việc chính. Hút riêng, và dọn tay
+        // cầm khi nó xong để khỏi giữ luồng đã chết.
+        let mut anh_xong = false;
+        if let Some(v) = &self.viec_anh {
+            while let Ok(t) = v.nhan.try_recv() {
+                if matches!(t, Tin::AnhXong(_)) {
+                    anh_xong = true;
+                }
+                hop.push(t);
+            }
+        }
+        if anh_xong {
+            self.viec_anh = None;
+        }
+        if !hop.is_empty() || self.viec.is_some() || self.viec_anh.is_some() {
             for t in hop {
                 match t {
                     Tin::DangLam(m) => {
@@ -213,10 +300,55 @@ impl UngDung {
                         xong = true;
                     }
                     Tin::SaoLuuXong(r, dich) => {
-                        self.ket_qua = vec![
-                            format!("Đã chép {} / {} tệp", r.da_chep, r.tong),
-                            format!("Vị trí: {dich}"),
+                        // Ghi lại trạng thái để bước xóa XÉT, không phải để hiển
+                        // thị. `het_cho` và phép so `da_chep` với `tong` là hai
+                        // vế bắt buộc — xem `gate::sao_luu_sach`.
+                        if let Some(q) = &self.quet {
+                            self.sao_luu_gan_nhat = Some(zalo_core::gate::KetQuaSaoLuu {
+                                dau_quet: q.dau_quet.clone(),
+                                tong: r.tong as u64,
+                                xong: r.da_chep as u64,
+                                loi_chep: r.chep_hong as u64,
+                                loi_xac_minh: r.xac_minh_hong as u64,
+                                het_cho: r.het_cho,
+                            });
+                        }
+                        let mut v = vec![
+                            format!(
+                                "Đã chép   : {} / {} tệp",
+                                so(r.da_chep as i64),
+                                so(r.tong as i64)
+                            ),
+                            format!(
+                                "Xác minh  : kích thước {}/{} · SHA-256 {}/{}",
+                                so(r.da_chep as i64),
+                                so(r.da_chep as i64),
+                                so(r.da_xac_minh as i64),
+                                so(r.da_chep as i64)
+                            ),
+                            format!("Vị trí    : {dich}"),
                         ];
+                        if self.sao_luu_sach() {
+                            v.push(format!(
+                                "{}  Sao lưu sạch. Đã mở khóa bước xóa.",
+                                bieu_tuong::XONG
+                            ));
+                        } else {
+                            v.push(format!(
+                                "{}  Sao lưu CHƯA sạch. Bước xóa vẫn bị chặn.",
+                                bieu_tuong::CANH_BAO
+                            ));
+                            if r.het_cho {
+                                v.push(
+                                    "Ổ đích hết chỗ giữa chừng — bản sao lưu không trọn vẹn."
+                                        .into(),
+                                );
+                            }
+                            for d in r.nhat_ky_loi.iter().take(5) {
+                                v.push(d.clone());
+                            }
+                        }
+                        self.ket_qua = v;
                         self.man = ManHinh::KetQua;
                         xong = true;
                     }
@@ -224,6 +356,13 @@ impl UngDung {
                         self.ket_qua = vec![format!("Đã khôi phục {} tệp", r.da_khoi_phuc)];
                         self.man = ManHinh::KetQua;
                         xong = true;
+                    }
+                    Tin::AnhXong(o) => {
+                        self.o_anh = o;
+                        self.anh_dang_giai_ma = false;
+                        // KHÔNG đổi màn hình: người dùng đang đứng ở danh sách,
+                        // và ảnh chỉ hiện dần ra. Nhảy màn giữa chừng là cướp
+                        // mất chỗ họ đang đọc.
                     }
                     Tin::Hong(m) => {
                         self.loi = Some(m);
@@ -238,6 +377,36 @@ impl UngDung {
         if xong {
             self.viec = None;
         }
+    }
+
+    /// **ĐM-08.** Dải thông báo đường lui, hiện trên **mọi** màn hình.
+    ///
+    /// Đặt ở khung trên cùng chứ không nhét vào trang chủ: người dùng có thể
+    /// bật trình đọc màn hình lúc đã đi sâu vào giữa luồng, và đó đúng là lúc
+    /// họ cần đường lui nhất — bắt họ quay về trang chủ mới thấy nó thì coi như
+    /// không có.
+    ///
+    /// Không có nút đóng dải này. `ĐM-05`: thông báo an toàn không tự biến mất,
+    /// và cũng không được để người dùng lỡ tay tắt mất.
+    fn ve_dai_duong_lui(&mut self, ctx: &egui::Context) {
+        // Dò lại theo nhịp thưa: trình đọc màn hình có thể bật lên giữa chừng.
+        if self.lan_do_duong_lui.elapsed().as_secs() >= 3 {
+            self.duong_lui = DuongLui::do_hien_tai();
+            self.lan_do_duong_lui = std::time::Instant::now();
+        }
+        if !self.duong_lui.nen_hien() {
+            return;
+        }
+        let cau = self.duong_lui.cau();
+        let mo_duoc = matches!(self.duong_lui, DuongLui::Co(_));
+        egui::TopBottomPanel::top("duong_lui").show(ctx, |ui| {
+            ui.add_space(4.0);
+            ui.label(format!("{}  {cau}", bieu_tuong::DAN_HUONG));
+            if mo_duoc && ui.button("Mở bản dòng lệnh").clicked() {
+                self.duong_lui.mo();
+            }
+            ui.add_space(4.0);
+        });
     }
 
     fn tieu_de(&self, ui: &mut egui::Ui, chu: &str) {
@@ -280,6 +449,9 @@ impl UngDung {
             .clicked()
         {
             self.man = ManHinh::LayLaiDungLuong;
+        }
+        if ui.button("Khôi phục dữ liệu đã sao lưu").clicked() {
+            self.man = ManHinh::KhoiPhuc;
         }
         if ui.button("Xem vùng bảo vệ").clicked() {
             self.man = ManHinh::VungBaoVe;
@@ -365,8 +537,30 @@ impl UngDung {
                         .collect();
                 }
             }
+            self.chay_giai_ma_anh();
             self.man = ManHinh::XemDanhSach;
         }
+
+        // Sao lưu là ĐƯỜNG LUI, nên nó phải đứng trước nút xóa cả về vị trí lẫn
+        // về câu chữ. Đặt sau nút xóa là mời người dùng đọc lướt qua nó.
+        ui.add_space(6.0);
+        if muc == MucRuiRo::NguyHiem {
+            if self.sao_luu_sach() {
+                ui.label(format!(
+                    "{}  Đã có bản sao lưu sạch cho đúng lượt quét này.",
+                    bieu_tuong::XONG
+                ));
+            } else {
+                ui.label(format!(
+                    "{}  Chưa sao lưu. Sao lưu là cách duy nhất để còn đường lui.",
+                    bieu_tuong::CANH_BAO
+                ));
+            }
+        }
+        if ui.button("Sao lưu trước khi xóa").clicked() {
+            self.man = ManHinh::SaoLuu;
+        }
+        ui.add_space(6.0);
 
         // CHỐT XEM TRƯỚC. Nút xóa không bật cho tới khi người dùng đã nhìn.
         let chot = self
@@ -399,13 +593,14 @@ impl UngDung {
     // ---------------------------------------------------------- xem danh sách
 
     fn ve_xem_danh_sach(&mut self, ui: &mut egui::Ui) {
-        let q = match &self.quet {
-            Some(q) => q,
-            None => {
-                self.man = ManHinh::TrangChu;
-                return;
-            }
-        };
+        if self.quet.is_none() {
+            self.man = ManHinh::TrangChu;
+            return;
+        }
+        // Bốc số ra TRƯỚC rồi mới vẽ: `ve_luoi_anh` cần mượn `self` ở dạng sửa
+        // được, mà tay mượn chỉ đọc của `self.quet` thì còn giữ suốt hàm.
+        let tong_tep = self.quet.as_ref().unwrap().tep.len();
+        let q = self.quet.as_ref().unwrap();
         self.tieu_de(ui, "Những tệp sắp mất");
         ui.label(format!(
             "{} tệp · {}. Đây là dữ liệu trên máy bạn.",
@@ -423,9 +618,23 @@ impl UngDung {
         }
         ui.add_space(6.0);
 
-        // RB-129: ảo hóa. Không có gì tỉ lệ với N chạy trong luồng vẽ.
-        let cao = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
         let goc = q.goc.clone();
+
+        // ---- Lưới ảnh xem trước: ma sát mạnh nhất của cả giao diện.
+        if self.anh_dang_giai_ma {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("Đang giải mã ảnh xem trước…");
+            });
+        }
+        if !self.o_anh.is_empty() {
+            self.ve_luoi_anh(ui, tong_tep);
+        }
+        ui.add_space(6.0);
+
+        // RB-129: ảo hóa. Không có gì tỉ lệ với N chạy trong luồng vẽ.
+        let q = self.quet.as_ref().unwrap();
+        let cao = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
         let tong = q.tep.len();
         egui::ScrollArea::vertical()
             .max_height(360.0)
@@ -664,6 +873,220 @@ impl UngDung {
         self.nut_quay_lai(ui, ManHinh::TrangChu);
     }
 
+    /// Lưới mười hai ảnh xem trước.
+    ///
+    /// Ô nào không giải mã được thì hiện dấu hỏi kèm tên tệp — **không bao giờ**
+    /// bỏ ô đó đi. Bỏ đi là người dùng đếm mười hai ô rồi tưởng mình đã nhìn hết
+    /// mười hai tệp, trong khi có tệp bị giấu.
+    fn ve_luoi_anh(&mut self, ui: &mut egui::Ui, tong: usize) {
+        if self.ket_cau.len() != self.o_anh.len() {
+            self.ket_cau = (0..self.o_anh.len()).map(|_| None).collect();
+        }
+        let canh = crate::anh::CANH as f32;
+        egui::ScrollArea::horizontal()
+            .id_salt("luoi_anh")
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for (i, o) in self.o_anh.iter().enumerate() {
+                        ui.vertical(|ui| {
+                            match &o.anh {
+                                Some(a) if a.rong > 0 => {
+                                    let tex = self.ket_cau[i].get_or_insert_with(|| {
+                                        let ci = egui::ColorImage::from_rgba_unmultiplied(
+                                            [a.rong, a.cao],
+                                            &a.diem,
+                                        );
+                                        ui.ctx().load_texture(
+                                            format!("xt{i}"),
+                                            ci,
+                                            egui::TextureOptions::LINEAR,
+                                        )
+                                    });
+                                    ui.image((tex.id(), tex.size_vec2()));
+                                }
+                                _ => {
+                                    // Ô dấu hỏi. Vẫn chiếm đúng chỗ của một ảnh
+                                    // để người dùng thấy rõ là có một tệp ở đây.
+                                    let (r, _) = ui.allocate_exact_size(
+                                        egui::vec2(canh, canh),
+                                        egui::Sense::hover(),
+                                    );
+                                    ui.painter().rect_stroke(
+                                        r,
+                                        2.0,
+                                        egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
+                                    );
+                                    ui.painter().text(
+                                        r.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        "?",
+                                        egui::FontId::proportional(28.0),
+                                        ui.visuals().text_color(),
+                                    );
+                                }
+                            }
+                            let ten = o
+                                .duong_dan
+                                .file_name()
+                                .map(|x| x.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            let ngan: String = ten.chars().take(14).collect();
+                            ui.small(ngan);
+                        });
+                    }
+                });
+            });
+        // RB-43: dòng này KHÔNG được nhỏ hơn chữ thường và KHÔNG được xám. Mười
+        // hai ảnh trông như một bằng chứng đầy đủ nếu thiếu nó.
+        ui.label(crate::anh::dong_ty_le_mau(self.o_anh.len(), tong));
+    }
+
+    // ---------------------------------------------------------------- sao lưu
+
+    fn ve_sao_luu(&mut self, ui: &mut egui::Ui) {
+        let (n, byte) = match &self.quet {
+            Some(q) => (q.tep.len(), q.byte()),
+            None => {
+                self.man = ManHinh::TrangChu;
+                return;
+            }
+        };
+        self.tieu_de(ui, "Sao lưu và xác minh");
+        ui.label(format!(
+            "Sẽ chép {} tệp · {}",
+            so(n as i64),
+            co(byte as i64)
+        ));
+        ui.add_space(6.0);
+        for o in sysinfo::cac_o_dia() {
+            ui.label(format!(
+                "Ổ {}  trống {}",
+                sysinfo::nhan_o_dia(&o),
+                co(sysinfo::byte_trong(&o))
+            ));
+        }
+        ui.add_space(8.0);
+        ui.label("Thư mục đích:");
+        ui.add(
+            egui::TextEdit::singleline(&mut self.dich_sao_luu)
+                .desired_width(420.0)
+                .hint_text(r"D:\SaoLuuZalo"),
+        );
+
+        ui.add_space(8.0);
+        ui.label("Mức xác minh sau khi chép:");
+        ui.radio_value(
+            &mut self.xac_minh_toan_bo,
+            false,
+            "Kích thước toàn bộ, cộng SHA-256 mẫu 50 tệp  (nhanh)",
+        );
+        ui.radio_value(
+            &mut self.xac_minh_toan_bo,
+            true,
+            "SHA-256 toàn bộ  (chậm nhưng chắc chắn tuyệt đối)",
+        );
+
+        // Chừa 2% cộng 100 MB: hệ tệp còn siêu dữ liệu, và một bản sao lưu vừa
+        // khít ổ đĩa là một bản sao lưu sắp hỏng.
+        let can = (byte as f64 * 1.02) as i64 + 100 * 1024 * 1024;
+        let trong = if self.dich_sao_luu.trim().is_empty() {
+            -1
+        } else {
+            sysinfo::byte_trong(&self.dich_sao_luu)
+        };
+        ui.add_space(8.0);
+        ui.label(format!("Cần ít nhất: {}", co(can)));
+
+        let du_cho = trong >= can;
+        if trong >= 0 {
+            ui.label(format!(
+                "Ổ {} trống: {}",
+                sysinfo::nhan_o_dia(&self.dich_sao_luu),
+                co(trong)
+            ));
+            if !du_cho {
+                ui.label(format!(
+                    "{}  Không đủ chỗ, thiếu khoảng {}. Chưa chép tệp nào.",
+                    bieu_tuong::CANH_BAO,
+                    co(can - trong)
+                ));
+            }
+        }
+
+        ui.add_space(10.0);
+        let nut = ui.add_enabled(du_cho, egui::Button::new("Bắt đầu sao lưu"));
+        if !du_cho {
+            nut.on_disabled_hover_text("nhập thư mục đích có đủ chỗ trống");
+        } else if nut.clicked() {
+            self.chay_sao_luu();
+        }
+        ui.add_space(12.0);
+        self.nut_quay_lai(ui, ManHinh::KetQuaQuet);
+    }
+
+    // -------------------------------------------------------------- khôi phục
+
+    fn ve_khoi_phuc(&mut self, ui: &mut egui::Ui) {
+        self.tieu_de(ui, "Khôi phục dữ liệu đã sao lưu");
+        if ui.button("Tìm các bản sao lưu trên máy").clicked() {
+            let cd =
+                zalo_core::store::doc_cai_dat(&sysinfo::thu_muc_cong_cu().join("settings.json"));
+            self.ds_sao_luu =
+                zalo_core::store::tim_ban_sao_luu(&cd.goc_sao_luu, &sysinfo::cac_o_dia());
+        }
+        ui.add_space(6.0);
+        if self.ds_sao_luu.is_empty() {
+            ui.label("Chưa tìm thấy bản sao lưu nào do công cụ này tạo ra.");
+        } else {
+            ui.label(format!(
+                "Tìm thấy {} bản sao lưu:",
+                so(self.ds_sao_luu.len() as i64)
+            ));
+        }
+        ui.add_space(6.0);
+        ui.checkbox(
+            &mut self.ghi_de_khi_khoi_phuc,
+            "Ghi đè tệp đã tồn tại  (mặc định là bỏ qua, an toàn hơn)",
+        );
+        ui.add_space(8.0);
+
+        let ds = self.ds_sao_luu.clone();
+        let mut chon: Option<zalo_core::store::BoSaoLuu> = None;
+        egui::ScrollArea::vertical()
+            .max_height(300.0)
+            .show(ui, |ui| {
+                for s in &ds {
+                    let m = &s.ban_ke;
+                    ui.separator();
+                    ui.label(format!(
+                        "{}   {} tệp · {}",
+                        m.tao_luc,
+                        so(m.so_tep),
+                        co(m.so_byte)
+                    ));
+                    ui.label(format!("Nội dung : {}", m.loai_quet));
+                    ui.label(format!("Nằm ở    : {}", s.thu_muc.display()));
+                    ui.label(format!("Trả về   : {}", m.goc_nguon));
+                    if m.chep_hong > 0 || m.xac_minh_hong > 0 {
+                        ui.label(format!(
+                            "{}  Bản này từng lỗi (chép {}, xác minh {})",
+                            bieu_tuong::CANH_BAO,
+                            so(m.chep_hong),
+                            so(m.xac_minh_hong)
+                        ));
+                    }
+                    if ui.button("Khôi phục bản này").clicked() {
+                        chon = Some(s.clone());
+                    }
+                }
+            });
+        if let Some(s) = chon {
+            self.chay_khoi_phuc(s);
+        }
+        ui.add_space(12.0);
+        self.nut_quay_lai(ui, ManHinh::TrangChu);
+    }
+
     // ==================================================== khởi động việc nền
 
     fn chay_quet_theo_tuoi(&mut self, thang: u32) {
@@ -815,6 +1238,101 @@ impl UngDung {
                 });
             },
         ));
+    }
+
+    /// Giải mã mười hai ảnh mẫu **ngoài luồng vẽ**.
+    ///
+    /// Đo trên dữ liệu Zalo thật ở bản gỡ lỗi: một tệp `.jxl` mất chừng ba giây.
+    /// Mười hai tệp là quá lâu để chặn luồng vẽ — cửa sổ đứng hình giữa lượt xem
+    /// trước là thứ khiến người ta bấm bừa hoặc tắt máy.
+    fn chay_giai_ma_anh(&mut self) {
+        let q = match &self.quet {
+            Some(q) => q,
+            None => return,
+        };
+        if !self.o_anh.is_empty() || self.anh_dang_giai_ma {
+            return;
+        }
+        let ds: Vec<PathBuf> = q.tep.iter().map(|t| PathBuf::from(&t.duong_dan)).collect();
+        // Hạt lấy từ dấu thời gian của lượt quét: cùng một lượt quét thì cùng
+        // một mẫu, nên ảnh không nhảy loạn mỗi lần mở lại danh sách.
+        let hat = q
+            .dau_quet
+            .bytes()
+            .fold(0u64, |a, b| a.wrapping_mul(31).wrapping_add(b as u64));
+        self.anh_dang_giai_ma = true;
+        self.viec_anh = Some(ViecNen::chay(
+            "Đang giải mã ảnh xem trước…",
+            move |g, co_huy, x, t| {
+                let chon = crate::anh::chon_mau(ds.len(), hat);
+                t.store(chon.len(), Ordering::Relaxed);
+                let mut ra = Vec::new();
+                for (i, k) in chon.iter().enumerate() {
+                    if co_huy.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    x.store(i, Ordering::Relaxed);
+                    let p = ds[*k].clone();
+                    let (loai, anh) = crate::anh::giai_ma(&p);
+                    ra.push(crate::anh::O {
+                        duong_dan: p,
+                        loai,
+                        anh,
+                    });
+                }
+                let _ = g.send(Tin::AnhXong(ra));
+            },
+        ));
+    }
+
+    fn chay_sao_luu(&mut self) {
+        let q = match &self.quet {
+            Some(q) => q,
+            None => return,
+        };
+        let (ds, goc, loai) = (q.tep.clone(), q.goc.clone(), q.loai.clone());
+        let dich = self.dich_sao_luu.trim().to_string();
+        let toan_bo = self.xac_minh_toan_bo;
+        self.man = ManHinh::DangLam;
+        self.viec = Some(ViecNen::chay(
+            "Đang sao lưu và xác minh…",
+            move |g, _, x, t| {
+                t.store(ds.len(), Ordering::Relaxed);
+                x.store(0, Ordering::Relaxed);
+                let dau = zalo_core::thoigian::luc_nay().dau_thoi_gian();
+                let thu_muc = Path::new(&dich).join(&dau);
+                match zalo_core::act::sao_luu(&ds, &goc, &thu_muc, toan_bo) {
+                    Ok(r) => {
+                        let _ = zalo_core::act::ghi_loai_quet(&thu_muc, &loai);
+                        x.store(ds.len(), Ordering::Relaxed);
+                        let _ = g.send(Tin::SaoLuuXong(
+                            Box::new(r),
+                            thu_muc.to_string_lossy().to_string(),
+                        ));
+                    }
+                    Err(e) => {
+                        let _ = g.send(Tin::Hong(format!("Không sao lưu được: {e}")));
+                    }
+                }
+            },
+        ));
+    }
+
+    fn chay_khoi_phuc(&mut self, bo: zalo_core::store::BoSaoLuu) {
+        let dich = bo.ban_ke.goc_nguon.clone();
+        let ghi_de = self.ghi_de_khi_khoi_phuc;
+        let nhat_ky = sysinfo::thu_muc_cong_cu().join("logs");
+        self.man = ManHinh::DangLam;
+        self.viec = Some(ViecNen::chay("Đang khôi phục…", move |g, _, _, _| {
+            match zalo_core::act::khoi_phuc(&bo.thu_muc, &dich, ghi_de, &nhat_ky) {
+                Ok(r) => {
+                    let _ = g.send(Tin::KhoiPhucXong(Box::new(r)));
+                }
+                Err(e) => {
+                    let _ = g.send(Tin::Hong(format!("Không khôi phục được: {e}")));
+                }
+            }
+        }));
     }
 
     fn chay_xoa(&mut self) {

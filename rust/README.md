@@ -3,17 +3,16 @@
 Đã qua **M0** (khung sườn + cổng kiến trúc), **M1** (lõi an toàn), **M2** (duyệt
 cây, băm, bộ lọc quét), **M3** (vỏ dòng lệnh) và **M4** (xóa · sao lưu · khôi phục).
 
-**M5** (giao diện đồ họa) đã xong phần kiểm được bằng máy; còn 10 mục mức 1 cần người thật và 3 việc chưa làm — xem kế hoạch.
+**M5** (giao diện đồ họa) đã xong phần kiểm được bằng máy. Còn đúng một thứ chặn nó: **10 mục mức 1 của danh mục tiếp cận cần người thật ngồi trước màn hình.**
 
 Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-hoach-port.md`](../docs/ke-hoach-port.md).
 
 > **Cả hai vỏ đều dọn dẹp được thật.** `zalo-cli` quét, sao lưu, xóa và khôi
 > phục — cùng một bộ test lái được cả nó lẫn bản PowerShell và cho cùng kết quả.
-> `zalo-gui` quét, xem trước và xóa được.
+> `zalo-gui` quét, xem trước ảnh, sao lưu, xóa và khôi phục được.
 >
 > Bản dành cho người dùng thường **vẫn là bản PowerShell** ở thư mục gốc: giao
-> diện còn mười mục mức 1 của danh mục tiếp cận chưa ai kiểm, và chưa có màn sao
-> lưu lẫn khôi phục.
+> diện còn mười mục mức 1 của danh mục tiếp cận chưa ai kiểm.
 
 ---
 
@@ -23,7 +22,7 @@ Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-ho
 
 Dự phóng lúc lập kế hoạch: lõi **36 crate**, cộng `eframe` thành **112**. Nghĩa là 76 crate chỉ để vẽ cửa sổ — và chúng không được dính vào phần quyết định xóa gì.
 
-Đo thật sau M5: lõi **17 crate**, cả cây có giao diện **129** — tức **112 crate chỉ để vẽ cửa sổ**, nhiều hơn dự phóng 76. Exe giao diện **2,64 MiB**, nhỏ hơn dự phóng 2,86 MiB dù đã nhúng sẵn phông 756 KB.
+Đo thật sau M5: lõi **17 crate**, cả cây có giao diện **145** — tức **128 crate chỉ để vẽ cửa sổ và giải mã ảnh**, nhiều hơn dự phóng 76. Exe giao diện **3,61 MiB**; trước khi thêm bộ giải mã JPEG XL nó là 2,64 MiB, nhỏ hơn dự phóng 2,86 MiB của hội đồng.
 
 Đây không phải khẩu hiệu. `tools\check-deps.ps1` kiểm nó bằng máy sau mỗi commit, và CI chạy nó.
 
@@ -35,7 +34,7 @@ Dự phóng lúc lập kế hoạch: lõi **36 crate**, cộng `eframe` thành *
 |:---|:---|:---|:---|
 | `zalo-core` | Lõi: quyết định xóa gì, và chặn cái gì | M1–M4 | tất cả **đã có** trừ `lock` |
 | `zalo-cli` | Vỏ dòng lệnh, nói đúng giao thức phím của bản PowerShell | M3–M4 | **đã có** |
-| `zalo-gui` | Vỏ đồ họa egui, **không chứa quyết định xóa** | M5 | **đã có** phần quét · xem trước · xóa |
+| `zalo-gui` | Vỏ đồ họa egui, **không chứa quyết định xóa** | M5 | **đã có** |
 
 ## Bộ đối chiếu song song — thứ chứng minh hai bản còn khớp
 
@@ -117,9 +116,27 @@ Không thể "giữ phím Enter năm giây" trong một hàm `#[test]` — nhưn
 
 **Lõi chưa có đường hủy.** Esc phải dừng được lượt xóa đang chạy *và* nhật ký phải ghi "đã hủy giữa chừng". Thiếu vế cuối là người dùng bấm Esc rồi mở nhật ký thấy `hoàn tất=True`.
 
+### Một lỗ nữa, chỉ lộ ra khi mở ứng dụng lên
+
+Màn hình hiện `? Xong.` thay vì `✓ Xong.` — dấu tích thành ô vuông rỗng.
+
+Đo tận nơi: **Segoe UI phủ đủ 134 chữ cái tiếng Việt nhưng thiếu bốn trên tám ký hiệu** — `⊘ ⚠ ✓ ✖`. Phép thử phủ glyph chỉ hỏi phông **nhúng**, không hỏi phông hệ thống đang thật sự dùng, nên nó xanh trong khi màn hình hỏng.
+
+Sửa bằng **chuỗi phông**: hệ thống cho chữ quen mắt, phông nhúng lấp glyph thiếu. Phép thử mới hỏi **cả chuỗi gộp lại**, không hỏi từng phông một.
+
+### Ảnh xem trước
+
+Mười hai ảnh lấy ngẫu nhiên, giải mã **ngoài luồng vẽ**, nhận dạng bằng **magic byte** chứ không bằng phần mở rộng — 43,7% tệp Zalo không có phần mở rộng, mà 88,5% trong số đó là JPEG.
+
+Có bộ giải mã **JPEG XL** vì `.jxl` chiếm **46,4%** dữ liệu thật; phép thử giải mã tệp `.jxl` **thật của Zalo**, không phải tệp dựng máy móc. Giá: exe từ 2,64 lên 3,61 MiB.
+
+Tệp không xem trước được hiện ô `?` và **vẫn nằm trong danh sách**. Giấu đi là người dùng xóa một thứ họ chưa từng nhìn thấy mà lại tưởng mình đã xem hết.
+
 ### Chưa xong, nói thẳng
 
-Mười mục **mức 1** của danh mục tiếp cận cần người thật ngồi trước màn hình; [`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên chúng sau mỗi lần chạy. Chưa có bộ giải mã JPEG XL (**46,4%** dữ liệu Zalo thật), chưa có màn sao lưu và khôi phục trong giao diện, và `ĐM-08` chưa cài.
+Mười mục **mức 1** của danh mục tiếp cận cần người thật ngồi trước màn hình — giữ Enter/Space/chuột, ảnh greyscale ba người thử, gõ `XOÁ` bằng Unikey, chỉ dùng bàn phím, giam tiêu điểm, màn 1366×768, canh giữa cửa sổ cha, `MAU-01`, `MAU-09`, `ĐM-08` với NVDA thật.
+
+[`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên chúng sau mỗi lần chạy. Đây là thứ duy nhất còn chặn M5, và nó chặn bằng người chứ không bằng mã.
 
 ---
 

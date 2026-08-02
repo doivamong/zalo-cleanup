@@ -24,6 +24,11 @@ eframe = { version = "0.29", default-features = false, features = [
 # số đó là JPEG. Tin phần mở rộng là xem trước được 2,5%; ngửi magic byte là 41%.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
+# JPEG XL chiếm **46,4%** dữ liệu Zalo thật. Không có bộ giải mã này thì ma sát
+# mạnh nhất của giao diện — nhìn thấy thứ sắp mất — hỏng với gần một nửa số tệp.
+# Xem docs/quyet-dinh.md §Q10, nơi số đo lật lại kết luận ban đầu của hội đồng.
+jxl-oxide = { version = "0.11", default-features = false, features = ["image"] }
+
 # Đã nằm sẵn trong cây phụ thuộc của egui. Khai báo thẳng để phép thử TV-04 hỏi
 # được từng chữ cái tiếng Việt xem phông có glyph không — cổng MỨC 1, chặn merge.
 ab_glyph = "0.2"

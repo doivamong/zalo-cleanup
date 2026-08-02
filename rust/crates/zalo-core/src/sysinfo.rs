@@ -93,6 +93,20 @@ extern "system" {
     fn CloseHandle(h_object: isize) -> i32;
 }
 
+// `SystemParametersInfoW` nằm ở **user32**, không phải kernel32. Khai nhầm khối
+// `#[link]` thì mã biên dịch trót lọt rồi hỏng ở bước LIÊN KẾT với lỗi 1120 —
+// tức lỗi hiện ra cách xa chỗ gây ra nó. Đã dính thật một lần.
+#[cfg(windows)]
+#[link(name = "user32")]
+extern "system" {
+    fn SystemParametersInfoW(
+        ui_action: u32,
+        ui_param: u32,
+        pv_param: *mut i32,
+        f_win_ini: u32,
+    ) -> i32;
+}
+
 #[cfg(windows)]
 #[repr(C)]
 struct ProcessEntry32W {
@@ -190,6 +204,37 @@ pub fn ten_ngan(duong_dan: &str) -> Option<String> {
     {
         let _ = duong_dan;
         None
+    }
+}
+
+/// Có trình đọc màn hình đang chạy không.
+///
+/// # Vì sao câu hỏi này là chuyện an toàn
+///
+/// Hội đồng ghi thẳng: **bản dòng lệnh là đường tiếp cận chính thức cho người
+/// khiếm thị, không phải tác dụng phụ tình cờ.** Console của Windows phơi văn
+/// bản ra UIA rất tốt, còn egui với AccessKit thì mới là nền móng — chưa có
+/// live region, chưa có hộp thoại gốc, bảng không phơi quan hệ hàng–cột.
+///
+/// Nên khi phát hiện trình đọc màn hình, giao diện phải **nói ra điều đó và mở
+/// sẵn đường lui**. Đây là mục cổng `ĐM-08`, mức 1.
+///
+/// `SPI_GETSCREENREADER` là cờ do chính trình đọc màn hình bật lên. Nó không
+/// phải phép dò hoàn hảo — vài trình đọc không bật cờ — nên nó chỉ dùng để
+/// **thêm** một đường lui, không bao giờ để bớt đi thứ gì.
+pub fn co_trinh_doc_man_hinh() -> bool {
+    #[cfg(windows)]
+    {
+        const SPI_GETSCREENREADER: u32 = 0x0046;
+        let mut co: i32 = 0;
+        // SAFETY: con trỏ trỏ vào biến cục bộ đã khởi tạo, đúng kiểu `BOOL` mà
+        // `SPI_GETSCREENREADER` ghi ra, và ta không truyền cờ ghi cấu hình.
+        let ok = unsafe { SystemParametersInfoW(SPI_GETSCREENREADER, 0, &mut co, 0) };
+        ok != 0 && co != 0
+    }
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 
@@ -335,6 +380,19 @@ mod tests {
     fn o_he_thong_co_dung_luong_trong_duong() {
         let n = byte_trong(&goc_he_thong());
         assert!(n > 0, "ổ hệ thống phải báo được dung lượng trống, nhận {n}");
+    }
+
+    /// **ĐM-08.** Phép dò phải trả lời được, và **không bao giờ hoảng**.
+    ///
+    /// Kết quả đúng hay sai tùy máy đang chạy gì, nên phép thử chỉ khẳng định
+    /// được điều duy nhất khẳng định được: hàm chạy tới nơi và trả về một trong
+    /// hai giá trị. Một lời gọi Win32 sai kiểu con trỏ thì hỏng ở đây chứ không
+    /// hỏng lúc người khiếm thị mở công cụ.
+    #[test]
+    fn do_duoc_trinh_doc_man_hinh_khong_hoang() {
+        let a = co_trinh_doc_man_hinh();
+        let b = co_trinh_doc_man_hinh();
+        assert_eq!(a, b, "hai lần hỏi liền nhau ra hai kết quả khác nhau");
     }
 
     /// Không có tiến trình nào tên như vậy thì phải trả danh sách rỗng, và

@@ -12,6 +12,7 @@ use eframe::egui;
 use zalo_gui::{phong, ung_dung};
 fn main() -> eframe::Result<()> {
     let (byte_phong, nguon) = phong::nap();
+    let goc = doc_tham_so_root();
 
     let tuy_chon = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -29,7 +30,7 @@ fn main() -> eframe::Result<()> {
         tuy_chon,
         Box::new(move |cc| {
             dat_phong(&cc.egui_ctx, byte_phong);
-            Ok(Box::new(ung_dung::UngDung::moi(nguon)))
+            Ok(Box::new(ung_dung::UngDung::moi(nguon, goc)))
         }),
     )
 }
@@ -39,15 +40,40 @@ fn main() -> eframe::Result<()> {
 /// Ghi đè cả hai họ `Proportional` và `Monospace`: phông mặc định của egui bị
 /// tắt hẳn ở `Cargo.toml`, nên để trống một họ nghĩa là chỗ đó không vẽ được
 /// chữ nào.
-fn dat_phong(ctx: &egui::Context, byte: Vec<u8>) {
+/// Đọc `-Root` từ dòng lệnh. Cùng cách viết với bản dòng lệnh, và cũng nhận cả
+/// `-Root X` lẫn `-Root=X`, không phân biệt hoa thường.
+fn doc_tham_so_root() -> Option<String> {
+    let t: Vec<String> = std::env::args().skip(1).collect();
+    let mut i = 0;
+    while i < t.len() {
+        let (ten, gan) = match t[i].split_once('=') {
+            Some((a, b)) => (a.to_string(), Some(b.to_string())),
+            None => (t[i].clone(), None),
+        };
+        if ten.trim_start_matches('-').eq_ignore_ascii_case("root") {
+            if let Some(v) = gan {
+                return Some(v);
+            }
+            return t.get(i + 1).cloned();
+        }
+        i += 1;
+    }
+    None
+}
+
+fn dat_phong(ctx: &egui::Context, chuoi: Vec<(String, Vec<u8>)>) {
     let mut f = egui::FontDefinitions::empty();
-    f.font_data
-        .insert("viet".to_owned(), egui::FontData::from_owned(byte));
+    let mut ten: Vec<String> = Vec::new();
+    for (n, b) in chuoi {
+        f.font_data.insert(n.clone(), egui::FontData::from_owned(b));
+        ten.push(n);
+    }
+    // THỨ TỰ trong danh sách chính là thứ tự egui thử glyph. Phông hệ thống
+    // đứng trước cho chữ quen mắt, phông nhúng đứng sau lấp glyph còn thiếu —
+    // Segoe UI phủ đủ chữ Việt nhưng thiếu bốn ký hiệu của bảng, và thiếu đúng
+    // ở những chỗ nói về an toàn.
     for ho in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        f.families
-            .entry(ho)
-            .or_default()
-            .insert(0, "viet".to_owned());
+        *f.families.entry(ho).or_default() = ten.clone();
     }
     ctx.set_fonts(f);
 

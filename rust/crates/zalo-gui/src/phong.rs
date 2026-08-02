@@ -81,18 +81,50 @@ pub enum NguonPhong {
     Nhung,
 }
 
-/// Nạp phông: thử hệ thống trước, không được thì dùng phông nhúng.
-pub fn nap() -> (Vec<u8>, NguonPhong) {
+/// Nạp **chuỗi** phông: phông hệ thống trước, phông nhúng luôn đứng cuối.
+///
+/// # Vì sao là chuỗi chứ không phải một phông
+///
+/// Bản đầu chọn đúng một phông: hệ thống nếu nó phủ đủ chữ Việt, không thì
+/// phông nhúng. Chạy thử thì màn hình hiện `? Xong.` — dấu `✓` thành dấu hỏi.
+///
+/// Đo tận nơi: **Segoe UI phủ đủ 134 chữ cái tiếng Việt nhưng thiếu bốn trên
+/// tám ký hiệu** của bảng — `⊘ ⚠ ✓ ✖`. Phép kiểm cũ chỉ hỏi chữ cái nên nó qua,
+/// rồi ký hiệu hiện thành ô vuông rỗng đúng ở những chỗ nói về an toàn.
+///
+/// Chuỗi phông sửa cả hai đầu: chữ vẫn là phông hệ thống quen mắt, còn glyph nào
+/// thiếu thì rơi xuống phông nhúng. egui thử theo đúng thứ tự trong danh sách.
+///
+/// Phông nhúng **luôn** có mặt ở cuối chuỗi, nên nhánh "không có phông nào"
+/// không tồn tại.
+pub fn nap() -> (Vec<(String, Vec<u8>)>, NguonPhong) {
     let thu_muc = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
+    let mut chuoi: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut nguon = NguonPhong::Nhung;
     for ten in CHUOI_DU_PHONG {
         let p = std::path::Path::new(&thu_muc).join("Fonts").join(ten);
         if let Ok(b) = std::fs::read(&p) {
+            // Phông hệ thống chỉ cần phủ đủ CHỮ CÁI; phần ký hiệu để phông nhúng
+            // lo. Đòi nó phủ cả ký hiệu là loại luôn Segoe UI, tức đổi lấy một
+            // giao diện lạ mắt để giải quyết một việc mà chuỗi dự phòng đã giải.
             if !b.is_empty() && du_chu_viet(&b) {
-                return (b, NguonPhong::HeThong(ten.to_string()));
+                chuoi.push((ten.to_string(), b));
+                nguon = NguonPhong::HeThong(ten.to_string());
+                break;
             }
         }
     }
-    (PHONG_NHUNG.to_vec(), NguonPhong::Nhung)
+    chuoi.push(("nhung".to_string(), PHONG_NHUNG.to_vec()));
+    (chuoi, nguon)
+}
+
+/// Phông này có đủ glyph cho **toàn bộ bảng ký hiệu** không.
+pub fn du_ky_hieu(byte: &[u8]) -> bool {
+    use ab_glyph::{Font, FontRef};
+    match FontRef::try_from_slice(byte) {
+        Ok(f) => bieu_tuong::TAT_CA.iter().all(|c| f.glyph_id(*c).0 != 0),
+        Err(_) => false,
+    }
 }
 
 /// **134 chữ cái tiếng Việt tiền tổ hợp không thuộc ASCII.**
@@ -246,17 +278,78 @@ mod tests {
         assert!(!du_chu_viet(&[]));
     }
 
-    /// Nạp phải luôn ra được một phông dùng được — nhánh "không có phông nào"
-    /// không được phép tồn tại.
+    /// Nạp phải luôn ra được một chuỗi dùng được, và phông nhúng **luôn** ở cuối.
     #[test]
-    fn nap_luon_tra_ve_phong_dung_duoc() {
-        let (b, nguon) = nap();
-        assert!(!b.is_empty());
-        let thieu = thieu_glyph(&b).expect("phông nạp về không đọc được");
+    fn nap_luon_co_phong_nhung_o_cuoi_chuoi() {
+        let (chuoi, _) = nap();
+        assert!(!chuoi.is_empty());
+        assert_eq!(
+            chuoi.last().unwrap().0,
+            "nhung",
+            "phông nhúng phải là chốt chặn cuối của chuỗi"
+        );
+        for (ten, b) in &chuoi {
+            assert!(!b.is_empty(), "phông {ten} rỗng");
+        }
+    }
+
+    /// **Cả chuỗi gộp lại** phải phủ đủ chữ cái VÀ đủ ký hiệu.
+    ///
+    /// Đây là phép thử bắt được lỗi thật: Segoe UI phủ đủ 134 chữ cái nhưng
+    /// thiếu bốn trên tám ký hiệu, nên bản một-phông hiện `? Xong.` thay vì
+    /// `✓ Xong.`. Hỏi từng phông một thì không thấy; hỏi cả chuỗi thì thấy.
+    #[test]
+    fn ca_chuoi_gop_lai_phu_du_chu_cai_va_ky_hieu() {
+        use ab_glyph::{Font, FontRef};
+        let (chuoi, _) = nap();
+        let fonts: Vec<FontRef> = chuoi
+            .iter()
+            .filter_map(|(_, b)| FontRef::try_from_slice(b).ok())
+            .collect();
+        assert!(!fonts.is_empty());
+        let co = |c: char| fonts.iter().any(|f| f.glyph_id(c).0 != 0);
+
+        let thieu_chu: Vec<char> = chu_cai_tieng_viet()
+            .into_iter()
+            .filter(|c| !co(*c))
+            .collect();
+        assert!(thieu_chu.is_empty(), "chuỗi phông thiếu chữ: {thieu_chu:?}");
+
+        let thieu_kh: Vec<char> = bieu_tuong::TAT_CA.into_iter().filter(|c| !co(*c)).collect();
         assert!(
-            thieu.is_empty(),
-            "phông từ {nguon:?} thiếu {} chữ tiếng Việt",
-            thieu.len()
+            thieu_kh.is_empty(),
+            "chuỗi phông thiếu ký hiệu: {thieu_kh:?}"
+        );
+    }
+
+    /// Phông nhúng một mình phải phủ đủ **cả hai** — nó là chốt chặn cuối, nên
+    /// nó thiếu thì không còn gì đỡ.
+    #[test]
+    fn phong_nhung_mot_minh_phu_du_ca_chu_lan_ky_hieu() {
+        assert!(du_chu_viet(PHONG_NHUNG));
+        assert!(du_ky_hieu(PHONG_NHUNG));
+    }
+
+    /// Đo tận nơi và ghim lại: **Segoe UI thiếu ký hiệu**. Ngày nào Microsoft
+    /// bổ sung chúng thì phép thử này đỏ, và người sửa đọc được lý do chuỗi
+    /// phông tồn tại trước khi gỡ nó đi.
+    #[test]
+    fn segoe_ui_phu_du_chu_nhung_thieu_ky_hieu() {
+        let p =
+            std::path::Path::new(&std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into()))
+                .join("Fonts")
+                .join("segoeui.ttf");
+        let b = match std::fs::read(&p) {
+            Ok(b) => b,
+            Err(_) => {
+                eprintln!("CHÚ Ý: máy này không có segoeui.ttf nên bỏ qua.");
+                return;
+            }
+        };
+        assert!(du_chu_viet(&b), "Segoe UI phải phủ đủ chữ cái tiếng Việt");
+        assert!(
+            !du_ky_hieu(&b),
+            "Segoe UI giờ đã phủ đủ ký hiệu — đọc lại chú thích ở `nap` trước khi gỡ chuỗi phông"
         );
     }
 }

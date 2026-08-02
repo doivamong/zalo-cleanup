@@ -21,6 +21,8 @@
 //!
 //! Mốc **M5**.
 
+pub mod anh;
+pub mod duong_lui;
 pub mod muc_rui_ro;
 pub mod nen;
 pub mod phong;

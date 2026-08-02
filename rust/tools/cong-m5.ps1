@@ -46,7 +46,8 @@ $canNguoiThat = @(
     @{ Ma = 'DPI-08'; Viec = 'Trang xác nhận mở canh giữa cửa sổ cha, cùng màn hình'; ChuY = '' }
     @{ Ma = 'MAU-01'; Viec = 'Bỏ hết màu vẫn hiểu — 3 người thử, 33/33'; ChuY = 'Chữ và ký hiệu đã có phép thử; phần người đọc thì chưa' }
     @{ Ma = 'MAU-09'; Viec = 'Ảnh greyscale, người thử chỉ đúng nút Hủy'; ChuY = '' }
-    @{ Ma = 'ĐM-08';  Viec = 'Bật trình đọc màn hình → hiện dải thông báo và nút mở bản dòng lệnh'; ChuY = 'CHƯA CÀI — xem tài liệu M5' }
+    @{ Ma = 'ĐM-08';  Viec = 'Bật NVDA thật → dải thông báo hiện ra và nút mở bản dòng lệnh chạy'
+       ChuY = 'ĐÃ CÀI; phần dò và phần mở đã có phép thử, phần "bật NVDA thật" thì chưa' }
 )
 
 Write-Host ''
@@ -123,6 +124,20 @@ foreach ($f in Get-ChildItem (Join-Path $rust 'crates\zalo-gui\src') -Filter *.r
     }
 }
 Assert 'TV-04' 'Không gõ thẳng ký hiệu vào mã, phải qua bảng đã kiểm glyph' ($nghi.Count -eq 0) ($nghi -join '; ')
+
+# ---- Ba việc M5 từng nợ. Kiểm bằng máy rằng chúng đã có thật, chứ không tin
+# vào một dòng ghi trong tài liệu.
+$guiSrc = Join-Path $rust 'crates\zalo-gui\src'
+$cargoGui = [IO.File]::ReadAllText((Join-Path $rust 'crates\zalo-gui\Cargo.toml'), [Text.Encoding]::UTF8)
+Assert 'M5-1' 'Có bộ giải mã JPEG XL (46,4% dữ liệu Zalo thật)' `
+    ($cargoGui -match 'jxl-oxide') 'thiếu phụ thuộc jxl-oxide'
+
+$ud = [IO.File]::ReadAllText((Join-Path $guiSrc 'ung_dung.rs'), [Text.Encoding]::UTF8)
+Assert 'M5-2' 'Có màn sao lưu và khôi phục trong giao diện' `
+    ($ud -match 'fn ve_sao_luu' -and $ud -match 'fn ve_khoi_phuc') 'thiếu một trong hai màn'
+
+Assert 'ĐM-08' 'Có dò trình đọc màn hình và đường lui sang bản dòng lệnh' `
+    ((Test-Path (Join-Path $guiSrc 'duong_lui.rs')) -and $ud -match 've_dai_duong_lui') 'chưa nối vào giao diện'
 
 Write-Host ''
 Write-Host '── Mục MỨC 1 CẦN NGƯỜI THẬT — chưa kiểm' -ForegroundColor Yellow

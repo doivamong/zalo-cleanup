@@ -464,7 +464,12 @@ Write-Host '══════════════════════�
 Write-Host '  CHÍN MỤC TIẾP CẬN MỨC 1 — chạy trên giao diện thật, trong hộp cát' -ForegroundColor Cyan
 Write-Host '════════════════════════════════════════════════════════════════' -ForegroundColor Cyan
 Write-Host "  Ảnh chụp để lại ở: $ThuMucAnh" -ForegroundColor DarkGray
-if (Test-Path $ThuMucAnh) { Remove-Item $ThuMucAnh -Recurse -Force -EA SilentlyContinue }
+# Chỉ dọn thư mục ảnh khi chạy TRỌN BỘ. Chạy từng phần bằng `-Chi` mà vẫn dọn
+# thì phần chạy sau xóa mất ảnh của phần trước, và bộ ảnh giao cho người thử
+# chỉ còn đúng phần chạy cuối cùng.
+if ($Chi -contains 'tat-ca' -and (Test-Path $ThuMucAnh)) {
+    Remove-Item $ThuMucAnh -Recurse -Force -EA SilentlyContinue
+}
 
 # ═════════════════════════════════════════════ ① BP-01 · chỉ dùng bàn phím
 if (Lam 'BP-01') {

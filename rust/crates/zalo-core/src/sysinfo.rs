@@ -82,6 +82,49 @@ extern "system" {
     ) -> i32;
     fn GetLocalTime(lp_system_time: *mut SystemTime16);
     fn GetSystemTime(lp_system_time: *mut SystemTime16);
+    fn GetShortPathNameW(
+        lpsz_long_path: *const u16,
+        lpsz_short_path: *mut u16,
+        cch_buffer: u32,
+    ) -> u32;
+}
+
+/// Dạng ngắn 8.3 của một đường dẫn, ví dụ `C:\Users\RUNNE~1`.
+///
+/// Trả `None` khi ổ đĩa đã tắt 8.3 hoặc đường dẫn không tồn tại.
+///
+/// # Dùng để làm gì
+///
+/// Không dùng trong lúc chạy. Đây là **công cụ để kiểm thử** một cửa an toàn:
+/// vùng bảo vệ so bằng chuỗi, nên một đường dẫn dạng ngắn lọt vào là vùng bảo vệ
+/// biến mất không một lời cảnh báo. Máy chủ CI có `%TEMP%` dạng ngắn và đã tìm
+/// ra đúng lỗi này ở bản PowerShell — bốn phép thử vùng bảo vệ đỏ trên CI trong
+/// khi vẫn xanh trên máy phát triển. Có hàm này thì phép thử dựng được cảnh ấy
+/// ở mọi máy, chứ không ngồi chờ CI.
+pub fn ten_ngan(duong_dan: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        let mut w: Vec<u16> = duong_dan.encode_utf16().collect();
+        w.push(0);
+        let mut ra = vec![0u16; 32768];
+        // SAFETY: `w` kết thúc bằng NUL và còn sống suốt lời gọi; `ra` đủ chỗ cho
+        // đường dẫn dài nhất Windows nhận, và ta truyền đúng sức chứa của nó.
+        let n = unsafe { GetShortPathNameW(w.as_ptr(), ra.as_mut_ptr(), ra.len() as u32) };
+        if n == 0 || n as usize >= ra.len() {
+            return None;
+        }
+        let s = String::from_utf16_lossy(&ra[..n as usize]);
+        if s.eq_ignore_ascii_case(duong_dan) {
+            None
+        } else {
+            Some(s)
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = duong_dan;
+        None
+    }
 }
 
 /// Chênh lệch giữa giờ địa phương và giờ UTC, tính bằng giây.

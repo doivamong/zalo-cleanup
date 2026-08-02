@@ -1699,8 +1699,21 @@ mod tests {
         app.giu_rescache = false;
 
         let bay_gio = std::time::SystemTime::now();
-        let trong_vung = du_lieu.join("Database").join("chat.db");
-        let ngoai_vung = goc.join("video").join("v1");
+        // Dựng đường dẫn từ GỐC ĐÃ CHUẨN HÓA của chính ứng dụng, không từ biến
+        // cục bộ ở trên.
+        //
+        // Máy chủ CI có %TEMP% dạng ngắn 8.3 (`C:\Users\RUNNE~1\...`), nên biến
+        // `tam` ở trên là dạng ngắn còn `app.goc_du_lieu` là dạng dài — và phép
+        // thử này đỏ trên CI trong khi vẫn xanh trên máy phát triển. Vòng quét
+        // thật không bao giờ gặp cảnh đó vì mọi đường dẫn nó xét đều do bộ duyệt
+        // sinh ra từ chính cái gốc đã chuẩn hóa. Đây là phép thử sai, không phải
+        // công cụ sai — nhưng nó sai theo đúng cách mà một lỗi thật cũng sẽ sai,
+        // nên phải dựng lại cho đúng chứ không nới điều kiện cho qua.
+        //
+        // Việc canon có thật sự mở được tên 8.3 hay không thì có phép thử riêng
+        // ngay bên dưới.
+        let trong_vung = Path::new(&app.goc_du_lieu).join("Database").join("chat.db");
+        let ngoai_vung = Path::new(&app.goc).join("video").join("v1");
 
         assert_eq!(
             app.xet_tep(&trong_vung.to_string_lossy(), 100, bay_gio, None, None, 0),
@@ -1802,5 +1815,47 @@ mod tests {
     fn canon_bo_gach_cheo_thua_nhung_giu_goc_o_dia() {
         assert_eq!(canon(r"C:\"), r"C:\");
         assert_eq!(canon(""), "");
+    }
+
+    /// `canon` phải MỞ được tên ngắn 8.3 thành tên dài.
+    ///
+    /// # Vì sao đây là chuyện an toàn chứ không phải chuyện gọn gàng
+    ///
+    /// Vùng bảo vệ so bằng **chuỗi**. Đưa gốc dữ liệu vào ở dạng ngắn
+    /// `C:\Users\RUNNE~1\...` trong khi bộ duyệt trả về dạng dài
+    /// `C:\Users\runneradmin\...` thì hai bên không bao giờ khớp, và vùng bảo vệ
+    /// **biến mất không một lời cảnh báo**.
+    ///
+    /// Bản PowerShell đã dính đúng lỗi này, và chính máy chủ CI tìm ra: `%TEMP%`
+    /// trên đó là dạng ngắn nên `Database` với `Partitions` bị xóa sạch, mà màn
+    /// hình không hề in dòng "Đã chặn ... tệp thuộc vùng bảo vệ".
+    ///
+    /// Ổ đĩa tắt 8.3 thì `ten_ngan` trả `None` và phép thử tự bỏ qua — nói rõ ra
+    /// bằng `eprintln!` chứ không im lặng báo xanh.
+    #[cfg(windows)]
+    #[test]
+    fn canon_mo_duoc_ten_ngan_8_3() {
+        let dai = std::env::temp_dir().join(format!(
+            "zalo_ten_that_dai_de_sinh_ten_ngan_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dai).unwrap();
+        let dai_s = dai.to_string_lossy().to_string();
+
+        match sysinfo::ten_ngan(&dai_s) {
+            None => eprintln!(
+                "CHÚ Ý: ổ đĩa này đã tắt tên ngắn 8.3 nên phép thử bỏ qua. \
+                 Trên máy có bật 8.3 nó mới kiểm được gì."
+            ),
+            Some(ngan) => {
+                assert!(ngan.contains('~'), "dạng ngắn phải có dấu ~, nhận {ngan}");
+                assert_eq!(
+                    canon(&ngan).to_lowercase(),
+                    canon(&dai_s).to_lowercase(),
+                    "canon KHÔNG mở được tên ngắn 8.3 — vùng bảo vệ sẽ trượt hết"
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dai);
     }
 }

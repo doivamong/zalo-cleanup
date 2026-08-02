@@ -134,7 +134,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
 | **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **3,61 MiB** · **60** phép thử giao diện · ba việc còn nợ **đã làm xong** · **§8.1-1 đã tự động hóa và đạt 8/8** trên giao diện thật · còn **9 mục mức 1** cần người thật |
-| **M6** Phát hành | ⬜ chưa | Chặn bởi `P2-1`, ngân sách ký số |
+| **M6** Phát hành | ✗ **cổng không đạt** | Quy trình phát hành **đã có** · ba lỗi tái lập đã sửa · nhưng `zalo-gui` không tất định (lỗi trong `glutin`) và MSVC không ghim được. Cộng thêm `P2-1` chưa quyết |
 
 ## M0 · Khung sườn — ✅ đạt
 
@@ -366,9 +366,49 @@ Hai lần bộ chạy này báo hỏng, **cả hai đều là lỗi của chính
 
 Đây là thứ duy nhất còn chặn M5, và nó chặn bằng người chứ không bằng mã.
 
-## M6 · Phát hành
+## M6 · Phát hành — ✗ cổng KHÔNG đạt, và đây là lý do đo được
 
 > **Cổng M6:** build tái lập được từ CI công khai, mã băm khớp bản tải về.
+
+**Cổng này không đạt.** Hai chỗ chặn, cả hai đều đo chứ không suy đoán, và **không chỗ nào nằm ở mã của dự án**.
+
+### Chặn ① — `zalo-gui.exe` không tất định ngay trên một máy
+
+Ba lần dựng sạch liên tiếp, cùng máy, cùng thư mục, cùng bộ cờ:
+
+| | `zalo-cli.exe` | `zalo-gui.exe` |
+|:---|:---|:---|
+| Lần 1 | `79DA53FB…` | `19940115…` |
+| Lần 2 | `79DA53FB…` | `431516A3…` |
+| Lần 3 | `79DA53FB…` | `15E47B40…` |
+
+Bản dòng lệnh tất định tuyệt đối; bản đồ họa đổi mỗi lần. Nguyên nhân nằm trong build script của thư viện đồ họa — `glutin_egl_sys` và `glutin_wgl_sys` sinh mã liên kết OpenGL theo thứ tự duyệt bảng băm, mà Rust ngẫu nhiên hóa thứ tự ấy theo từng tiến trình. Bịt được thì phải vá hoặc nhúng bản riêng của thư viện ngoài.
+
+### Chặn ② — bộ công cụ MSVC là đầu vào của bản dựng, mà không ghim được
+
+Ngay cả `zalo-cli.exe`, thứ tất định tuyệt đối trên máy phát triển, vẫn khác bản CI: `79DA53FB…` so với `B7FD9341…`, **cùng kích thước 507.392 byte**, khác 5,32% số byte rải trên 3.865 vùng.
+
+Thư viện CRT của Visual Studio được liên kết vào tệp thực thi, nên phiên bản của nó là một đầu vào ngang hàng với phiên bản `rustc`. Máy chủ GitHub **đổi ảnh máy giữa các lượt chạy** — đo được Visual Studio `18.8.12023.21` ở lượt này và `18.7.11925.98` ở lượt kế. Tức CI còn không tái lập được với chính nó.
+
+### Ba thứ đã sửa được trên đường đi
+
+| Sửa | Bằng chứng |
+|:---|:---|
+| **Dấu thời gian PE** — trước đó hai lần dựng sạch cùng máy cùng đường dẫn đã ra hai tệp khác nhau | `/Brepro` · sau đó `zalo-cli` tất định |
+| **Đường dẫn tuyệt đối nhúng vào tệp** — `glutin` để lọt `D:\<gốc>\rust\target\...\egl_bindings.rs` vào chuỗi báo lỗi | `--remap-path-prefix` · dựng ở hai thư mục khác nhau ra tệp **trùng khít từng byte** |
+| **Trình liên kết lấy nhầm toolchain** — script hỏi `rustc --print sysroot` ở gốc repo, nơi `rust-toolchain.toml` không có hiệu lực, nên CI lấy `rust-lld` của 1.97.1 đi liên kết mã do 1.94.1 biên dịch | Hỏi sysroot từ **bên trong** `rust\` |
+
+Lỗi thứ ba là lỗi của chính bộ dựng tôi viết, và nó **không lộ ra trên máy phát triển** vì toolchain mặc định ở đó tình cờ trùng bản đã ghim.
+
+### Ba lựa chọn, kèm giá
+
+| | Làm gì | Giá |
+|:---|:---|:---|
+| **A** | Nhận hiện trạng: phát hành đúng tệp CI dựng, kèm `SHA256SUMS.txt`. Mã băm chứng minh tệp không bị sửa **trên đường**, và bản `.ps1` vẫn là đường kiểm chứng đến tận cùng | 0 đồng, và tài liệu phát hành đã nói thẳng chuyện này |
+| **B** | Máy chủ tự quản với Visual Studio ghim phiên bản | Tiền và công bảo trì đều đặn |
+| **C** | Nhúng bản riêng của `glutin` đã vá cho tất định, rồi làm tiếp chặn ② | Ôm một nhánh riêng của thư viện ngoài — món nợ dài hạn |
+
+Chưa chọn. Đây là quyết định của chủ dự án, giống `P2-1`.
 
 ---
 

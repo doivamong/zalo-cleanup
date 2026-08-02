@@ -42,20 +42,26 @@ Get-FileHash .\zalo-gui.exe -Algorithm SHA256
 So với dòng tương ứng trong `SHA256SUMS.txt`. Khác một ký tự là tệp không phải
 bản chúng tôi dựng.
 
-**Bước 2 — tự dựng lại.** Mã băm chỉ chứng minh tệp không bị sửa sau khi dựng.
-Muốn chắc rằng chính bản dựng ấy đến từ mã nguồn này thì tự dựng lấy:
+**Bước 2 — nếu bạn muốn chắc hơn nữa: đọc `ZaloCleanup.ps1`.**
 
-```powershell
-git clone https://github.com/doivamong/zalo-cleanup
-cd zalo-cleanup
-powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\dung-phat-hanh.ps1
-```
+Chúng tôi **đã thử** làm cho bạn dựng lại `.exe` và ra đúng từng byte, và **chưa
+làm được**. Nói thẳng thay vì để bạn tự phát hiện:
 
-Mã băm in ra phải **trùng khít** với `SHA256SUMS.txt`. Build được làm cho tái lập
-được: dấu thời gian trong đầu tệp PE bị vô hiệu, và mọi đường dẫn tuyệt đối bị
-ánh xạ về tên cố định — nên máy bạn ra đúng byte như máy chủ CI.
+| Đã bịt được | Chưa bịt được |
+|:---|:---|
+| Dấu thời gian trong đầu tệp PE | Thư viện CRT của Visual Studio là **đầu vào của bản dựng**, và không ghim được từ kho mã. Máy chủ CI đổi phiên bản Visual Studio theo từng lượt chạy |
+| Đường dẫn tuyệt đối lọt vào tệp nhị phân | `zalo-gui.exe` còn **không tất định trên cùng một máy**: build script của thư viện đồ họa sinh mã theo thứ tự không cố định |
 
-Cần đúng phiên bản Rust ghim trong `rust-toolchain.toml`; `rustup` tự cài nó.
+Đo được: `zalo-cli.exe` dựng lại **giống hệt** qua nhiều lượt và nhiều thư mục
+trên cùng một máy — nhưng máy khác thì khác. `zalo-gui.exe` thì khác ngay ở lần
+dựng thứ hai trên chính máy đó.
+
+Nghĩa là `SHA256SUMS.txt` **chỉ** chứng minh tệp bạn tải về đúng là tệp máy chủ
+CI đã dựng, không bị sửa trên đường. Nó **không** thay được việc đọc mã nguồn.
+
+**Muốn kiểm chứng đến tận cùng thì dùng `ZaloCleanup.ps1`.** Nó là văn bản thuần,
+bạn đọc được từng dòng, và nó làm đúng những việc như hai bản kia — có bộ test
+lái được cả ba để chứng minh điều đó sau mỗi commit.
 
 ---
 

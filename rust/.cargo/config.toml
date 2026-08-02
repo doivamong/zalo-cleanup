@@ -1,0 +1,10 @@
+﻿# Build phải TÁI LẬP ĐƯỢC — đó là cổng của mốc M6.
+#
+# Đo trước khi thêm cờ này: hai lần dựng sạch trên CÙNG một máy, CÙNG một đường
+# dẫn, ra hai tệp exe khác nhau. Thủ phạm là dấu thời gian mà link.exe của MSVC
+# nhét vào đầu tệp PE.
+#
+# /Brepro bảo trình liên kết thay dấu thời gian bằng một giá trị băm từ nội
+# dung, nên cùng đầu vào ra cùng đầu ra.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Clink-arg=/Brepro"]

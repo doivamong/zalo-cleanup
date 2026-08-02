@@ -1,0 +1,79 @@
+# Phát hành — mốc M6.
+#
+# Cổng M6: "build tái lập được từ CI công khai, mã băm khớp bản tải về."
+#
+# Vì sao cổng ấy không phải chuyện hình thức: người dùng MẤT khả năng đọc mã
+# nguồn khi ta chuyển từ .ps1 sang .exe. Thứ duy nhất thay thế được là họ tự
+# dựng lại rồi thấy mã băm khớp. Băm không khớp thì lời hứa "vẫn kiểm chứng
+# được" là lời hứa rỗng.
+#
+# Hai thứ phá tính tái lập, cả hai đã đo được và đã bịt trong
+# rust\tools\dung-phat-hanh.ps1: dấu thời gian trong đầu tệp PE, và đường dẫn
+# tuyệt đối của thư mục build lọt vào chuỗi thông báo lỗi của glutin.
+
+name: Phát hành
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dung:
+    name: Dựng exe tái lập được
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # KHÔNG dùng bộ nhớ đệm ở đây. Bản phát hành phải dựng từ đầu, vì một bộ
+      # đệm bẩn là đúng thứ mà cổng tái lập sinh ra để bắt.
+      - name: Bản công cụ đang dùng
+        shell: pwsh
+        run: |
+          rustc --version
+          cargo --version
+          Write-Host "MSVC:"
+          # Phiên bản trình liên kết ảnh hưởng tới đầu ra, nên phải ghi lại để
+          # người dựng lại biết mình cần đúng bản nào.
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationVersion
+          Write-Host "  Visual Studio $vs"
+
+      - name: Dựng
+        shell: powershell
+        working-directory: .
+        run: .\rust\tools\dung-phat-hanh.ps1
+
+      - name: Băm và gói
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force phat-hanh | Out-Null
+          Copy-Item rust\target\release\zalo-cli.exe phat-hanh\
+          Copy-Item rust\target\release\zalo-gui.exe phat-hanh\
+          Copy-Item ZaloCleanup.ps1 phat-hanh\
+          Copy-Item rust\crates\zalo-gui\assets\DejaVuSans.LICENSE.txt phat-hanh\
+          $lines = @()
+          foreach ($f in Get-ChildItem phat-hanh -File | Sort-Object Name) {
+            $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+            $lines += "$h  $($f.Name)"
+          }
+          # Dạng chuẩn của sha256sum, để người dùng kiểm bằng công cụ có sẵn.
+          $lines -join "`n" | Set-Content phat-hanh\SHA256SUMS.txt -Encoding ascii -NoNewline
+          Get-Content phat-hanh\SHA256SUMS.txt | Write-Host
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phat-hanh
+          path: phat-hanh/
+
+      # Chỉ tạo bản phát hành khi đẩy thẻ. `workflow_dispatch` chỉ dựng và băm,
+      # để đối chiếu được mà không lỡ tay công bố.
+      - name: Tạo bản phát hành
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: phat-hanh/*
+          body_path: docs/PHAT-HANH.md

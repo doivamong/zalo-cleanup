@@ -62,6 +62,29 @@ jobs:
           Copy-Item rust\target\release\zalo-gui.exe phat-hanh\
           Copy-Item ZaloCleanup.ps1 phat-hanh\
           Copy-Item rust\crates\zalo-gui\assets\DejaVuSans.LICENSE.txt phat-hanh\
+
+          # MÔI TRƯỜNG DỰNG là một phần của bản phát hành, không phải siêu dữ
+          # liệu cho vui. Cổng tái lập không đạt (xem docs/ke-hoach-port.md §M6),
+          # nên thứ duy nhất còn nói được là "tệp này ra đời ở ĐÚNG chỗ này, lúc
+          # này, bằng ĐÚNG bộ công cụ này". Không ghi lại thì mã băm là một con
+          # số không truy được về đâu.
+          Push-Location rust
+          $rustc = (& rustc --version).Trim()
+          Pop-Location
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = if (Test-Path $vswhere) { (& $vswhere -latest -property installationVersion) } else { 'không rõ' }
+          @(
+            "Dựng lúc      : $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss')) UTC"
+            "Commit        : $env:GITHUB_SHA"
+            "Máy chủ       : $env:RUNNER_OS · ảnh $env:ImageVersion"
+            "rustc         : $rustc"
+            "Visual Studio : $vs"
+            ""
+            "Bộ thư viện CRT của Visual Studio được liên kết vào tệp thực thi, nên"
+            "phiên bản của nó là ĐẦU VÀO của bản dựng ngang hàng với phiên bản rustc."
+            "Máy chủ GitHub đổi ảnh giữa các lượt chạy, nên dựng lại ở nơi khác sẽ ra"
+            "tệp khác. Xem docs/PHAT-HANH.md, mục kiểm chứng."
+          ) -join "`r`n" | Set-Content phat-hanh\BUILD-ENV.txt -Encoding utf8
           $lines = @()
           foreach ($f in Get-ChildItem phat-hanh -File | Sort-Object Name) {
             $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()

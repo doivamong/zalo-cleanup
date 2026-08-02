@@ -3,7 +3,7 @@
 > Đầu vào: [`docs/ui-ux-council.md`](ui-ux-council.md) mục 9 · [`docs/rust-port-brief.md`](rust-port-brief.md)
 > Ngày: **01/08/2026** · Trạng thái mã nguồn tại thời điểm chốt: `e30e2ee`
 >
-> **Tình trạng: 10/12 đã quyết.** Hai câu còn lại là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**.
+> **Tình trạng: 11/13 đã quyết.** Hai câu còn lại là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**.
 >
 > **Cách đọc:** mục ✅ là đã quyết, có bằng chứng đo được ngay trong tài liệu này.
 > Mục ❓ là còn chờ chủ dự án, và ghi rõ nó đang chặn cái gì.
@@ -28,6 +28,7 @@
 | 10 | Bộ giải mã JPEG XL | ✅ có ⚠️ tiền đề của hội đồng sai |
 | 11 | Hai bản dùng chung tệp cấu hình | ✅ chia ba cách |
 | 12 | Nút "Tiếp tục phần còn lại" | ✅ bỏ |
+| 13 | Đóng M6 khi cổng tái lập không đạt | ✅ **phương án A** |
 
 ---
 
@@ -257,3 +258,31 @@ Ghi riêng ra để phiên sau không đọc nhầm bản chốt của hội đ�
 | **10** | Không có JXL thì hầu hết ảnh mất xem trước | **41% vẫn xem được** nếu ngửi magic byte. Nhóm không đuôi là **88,5% JPEG**, không phải video |
 
 Và một chỗ hội đồng nói mà kiểm lại thì không tái hiện được: **`Test-ConfirmPhrase` không cần chuẩn hóa NFC** trên máy này.
+
+---
+
+## ✅ Q13 — Đóng M6 theo phương án A · **chủ dự án đã chọn 02/08/2026**
+
+Cổng M6 đòi "build tái lập được từ CI công khai, mã băm khớp bản tải về". Đo ra **không đạt**, vì hai chỗ chặn nằm ngoài mã của dự án — xem [`ke-hoach-port.md`](ke-hoach-port.md) §M6.
+
+Ba phương án đã đặt ra, chủ dự án chọn **A**.
+
+### A nghĩa là gì, nói cho hết
+
+| Vẫn đúng | Không còn đúng |
+|:---|:---|
+| Bản phát hành là **đúng tệp máy chủ CI đã dựng**, không ai đụng vào giữa chừng | Người dùng **không** tự dựng lại rồi so byte được |
+| `SHA256SUMS.txt` bắt được mọi sửa đổi **trên đường truyền** | Mã băm **không** chứng minh tệp ấy sinh ra từ đúng mã nguồn này |
+| `ZaloCleanup.ps1` vẫn là văn bản thuần, đọc được từng dòng, và **cùng bộ test lái được cả ba bản** | — |
+
+Nói cách khác: đường kiểm chứng đến tận cùng vẫn còn, nhưng nó đi qua bản `.ps1` chứ không đi qua mã băm của `.exe`. Tài liệu phát hành phải nói đúng như vậy, và [`PHAT-HANH.md`](PHAT-HANH.md) đã sửa lại cho khớp.
+
+### Vì sao A hợp lý, chứ không phải chỉ là rẻ nhất
+
+Thứ mà tính tái lập bảo vệ là **niềm tin rằng exe sinh ra từ mã nguồn công khai**. Dự án này còn một đường khác cho cùng niềm tin ấy, và đường đó mạnh hơn với người dùng thường: **bản `.ps1` đọc thẳng được**, không cần dựng lại gì. Người đủ kỹ thuật để dựng lại Rust cũng là người đọc được `.ps1`.
+
+B và C mua thêm được một tầng cho nhóm người đã có sẵn một tầng. Giá thì thật: B là tiền và công bảo trì đều đặn, C là ôm một nhánh riêng của thư viện ngoài.
+
+### A **không** trả lời Q1
+
+Ký số vẫn chưa quyết. A chỉ nói "không chặn phát hành vì chuyện tái lập"; nó không nói gì về SmartScreen. Bản phát hành vẫn **chưa ký**, và tài liệu vẫn phải nói thẳng chuyện đó.

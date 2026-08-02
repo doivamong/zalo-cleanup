@@ -134,7 +134,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
 | **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **3,61 MiB** · **60** phép thử giao diện · ba việc còn nợ **đã làm xong** · **§8.1-1 đã tự động hóa và đạt 8/8** trên giao diện thật · còn **9 mục mức 1** cần người thật |
-| **M6** Phát hành | ✗ **cổng không đạt** | Quy trình phát hành **đã có** · ba lỗi tái lập đã sửa · nhưng `zalo-gui` không tất định (lỗi trong `glutin`) và MSVC không ghim được. Cộng thêm `P2-1` chưa quyết |
+| **M6** Phát hành | ◐ **đóng theo phương án A** | Cổng tái lập **không đạt** — hai chỗ chặn nằm ngoài mã dự án. Chủ dự án chọn **A**: phát hành đúng tệp CI dựng kèm `SHA256SUMS`, đường kiểm chứng đến tận cùng đi qua bản `.ps1`. `P2-1` vẫn chưa quyết |
 
 ## M0 · Khung sườn — ✅ đạt
 
@@ -408,7 +408,7 @@ Lỗi thứ ba là lỗi của chính bộ dựng tôi viết, và nó **không 
 | **B** | Máy chủ tự quản với Visual Studio ghim phiên bản | Tiền và công bảo trì đều đặn |
 | **C** | Nhúng bản riêng của `glutin` đã vá cho tất định, rồi làm tiếp chặn ② | Ôm một nhánh riêng của thư viện ngoài — món nợ dài hạn |
 
-Chưa chọn. Đây là quyết định của chủ dự án, giống `P2-1`.
+**Chủ dự án chọn A** (02/08/2026) — xem [`quyet-dinh.md`](quyet-dinh.md) §Q13. Lý do: dự án còn một đường khác cho cùng niềm tin ấy, và với người dùng thường nó mạnh hơn — bản `.ps1` đọc thẳng được, không cần dựng lại gì. B và C mua thêm một tầng cho nhóm người đã có sẵn một tầng.
 
 ---
 

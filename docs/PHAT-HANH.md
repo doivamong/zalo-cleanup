@@ -59,6 +59,10 @@ dựng thứ hai trên chính máy đó.
 Nghĩa là `SHA256SUMS.txt` **chỉ** chứng minh tệp bạn tải về đúng là tệp máy chủ
 CI đã dựng, không bị sửa trên đường. Nó **không** thay được việc đọc mã nguồn.
 
+Kèm theo có `BUILD-ENV.txt` ghi lại commit, phiên bản `rustc` và phiên bản Visual
+Studio đã dựng ra gói này — để mã băm truy được về đúng một lần chạy cụ thể trên
+CI công khai, thay vì là một con số không rõ từ đâu.
+
 **Muốn kiểm chứng đến tận cùng thì dùng `ZaloCleanup.ps1`.** Nó là văn bản thuần,
 bạn đọc được từng dòng, và nó làm đúng những việc như hai bản kia — có bộ test
 lái được cả ba để chứng minh điều đó sau mỗi commit.

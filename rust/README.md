@@ -142,11 +142,20 @@ Hai lần bộ chạy báo hỏng, **cả hai đều là lỗi của chính nó*
 
 Không chạy được trên CI vì nó cần một phiên màn hình thật.
 
-### Chưa xong, nói thẳng
+### Chín mục mức 1 — "cần người thật" hóa ra sai một nửa
 
-Chín mục **mức 1** của danh mục tiếp cận cần người thật ngồi trước màn hình — ảnh greyscale ba người thử, gõ `XOÁ` bằng Unikey, chỉ dùng bàn phím, giam tiêu điểm, màn 1366×768, canh giữa cửa sổ cha, `MAU-01`, `MAU-09`, `ĐM-08` với NVDA thật.
+Chín mục ấy từng mang nhãn *không cỗ máy nào kết luận được*. Rồi mới đo: egui bật `accesskit`, mà AccessKit phơi **toàn bộ cây widget** ra UI Automation của Windows — tên, vai trò, bật hay tắt, và khung bao theo tọa độ màn hình. Hỏi được bằng máy đúng những câu tưởng phải nhìn bằng mắt.
 
-[`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên chúng sau mỗi lần chạy. Đây là thứ duy nhất còn chặn M5, và nó chặn bằng người chứ không bằng mã.
+[`tools/kiem-muc-1.ps1`](tools/kiem-muc-1.ps1) lái giao diện thật trong hộp cát và đo hết. Nó bắt được **hai lỗi** mà chín mục "chờ người kiểm" không bắt được:
+
+- **`DPI-04`** — ở 1092×614 dip (màn 1366×768 @125%), **4 trong 12 ô ảnh xem trước** nằm ngoài mép phải, sau một thanh cuộn ngang mà bàn phím không tới được. Lưới ấy tồn tại để người dùng *nhìn thấy* thứ sắp mất; giấu một phần ba số ảnh là bỏ đi đúng phần ma sát nó sinh ra để tạo. Đã sửa thành chia hàng.
+- **`BP-01`** — egui 0.29 để widget đang **tắt** nuốt mất một chặng Tab, nên widget đứng sau nó không bao giờ nhận được tiêu điểm. Dính ba màn; nặng nhất là **trang chủ** khi máy chưa cài Zalo — cả màn hình chết với bàn phím. Đã vá, kèm phép thử ghim lỗ của egui để ngày họ tự sửa thì nó đỏ lên.
+
+Còn lại đúng bốn việc, và không việc nào là mã: `BP-01` cần một cửa sổ **máy yên tĩnh** (bộ chạy chiếm bàn phím của cả máy); ba mục greyscale cần **ba người thử**; `ĐM-08` cần **NVDA thật**; và vụ ứng dụng tự thoát 1/5 lượt khi bị gọi `SetFocus` thì cần thêm số đo.
+
+[`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên phần còn lại sau mỗi lần chạy.
+
+> **`kiem-muc-1.ps1` gõ phím THẬT** ở ba phần `BP-01`, `BP-04`, `§8.1-3` — chúng chính là phép thử về bàn phím. Đóng hết ứng dụng khác trước khi chạy. Ba phần còn lại đi bằng `InvokePattern` của UIA và chạy lúc nào cũng an toàn.
 
 ---
 
@@ -167,6 +176,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-song-song.ps
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-lien-thong.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-m5.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\phep-thu-ma-sat.ps1
+```
+
+Bộ chạy mục mức 1 chạy được từng phần. Ba phần đầu **gõ phím thật**, ba phần sau thì không:
+
+```powershell
+powershell -File rust\tools\kiem-muc-1.ps1 -Chi MAU,DM-08,DPI    # an toàn, đi bằng UIA
+powershell -File rust\tools\kiem-muc-1.ps1 -Chi BP-01,BP-04,8.1-3   # cần máy yên tĩnh
 ```
 
 ---

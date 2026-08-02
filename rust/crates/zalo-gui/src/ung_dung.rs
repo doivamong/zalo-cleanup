@@ -471,10 +471,7 @@ impl UngDung {
         ui.add_space(10.0);
         ui.label("Bạn muốn làm gì?");
         ui.add_space(6.0);
-        if ui
-            .add_enabled(self.co_zalo, egui::Button::new("Lấy lại dung lượng ổ đĩa"))
-            .clicked()
-        {
+        if nut_co_the_tat(ui, self.co_zalo, "Lấy lại dung lượng ổ đĩa").clicked() {
             self.man = ManHinh::LayLaiDungLuong;
         }
         if ui.button("Khôi phục dữ liệu đã sao lưu").clicked() {
@@ -596,9 +593,10 @@ impl UngDung {
             .map(|q| q.chot.clone())
             .unwrap_or_default();
         let cho = chot.cho_sang_trang_xac_nhan();
-        let nut = ui.add_enabled(
+        let nut = nut_co_the_tat(
+            ui,
             cho,
-            egui::Button::new(format!("{}  Xóa vĩnh viễn…", bieu_tuong::NGUY_HIEM)),
+            format!("{}  Xóa vĩnh viễn…", bieu_tuong::NGUY_HIEM),
         );
         if let Some(ly_do) = chot.ly_do_tat() {
             // ĐM-06: nút tắt phải NÓI được lý do, không chỉ xám đi.
@@ -774,10 +772,7 @@ impl UngDung {
             let x = self.xn.as_ref().unwrap();
             let cho = x.cho_bam_xoa();
             let ly_do = x.ly_do_nut_tat();
-            let nut = ui.add_enabled(
-                cho,
-                egui::Button::new(format!("{}  Xóa vĩnh viễn", bieu_tuong::NGUY_HIEM)),
-            );
+            let nut = nut_co_the_tat(ui, cho, format!("{}  Xóa vĩnh viễn", bieu_tuong::NGUY_HIEM));
             if let Some(l) = ly_do {
                 nut.on_disabled_hover_text(l);
             } else if nut.clicked() && !nuot_bam {
@@ -910,59 +905,79 @@ impl UngDung {
             self.ket_cau = (0..self.o_anh.len()).map(|_| None).collect();
         }
         let canh = crate::anh::CANH as f32;
-        egui::ScrollArea::horizontal()
-            .id_salt("luoi_anh")
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (i, o) in self.o_anh.iter().enumerate() {
-                        ui.vertical(|ui| {
-                            match &o.anh {
-                                Some(a) if a.rong > 0 => {
-                                    let tex = self.ket_cau[i].get_or_insert_with(|| {
-                                        let ci = egui::ColorImage::from_rgba_unmultiplied(
-                                            [a.rong, a.cao],
-                                            &a.diem,
-                                        );
-                                        ui.ctx().load_texture(
-                                            format!("xt{i}"),
-                                            ci,
-                                            egui::TextureOptions::LINEAR,
-                                        )
-                                    });
-                                    ui.image((tex.id(), tex.size_vec2()));
-                                }
-                                _ => {
-                                    // Ô dấu hỏi. Vẫn chiếm đúng chỗ của một ảnh
-                                    // để người dùng thấy rõ là có một tệp ở đây.
-                                    let (r, _) = ui.allocate_exact_size(
-                                        egui::vec2(canh, canh),
-                                        egui::Sense::hover(),
+        // XUỐNG DÒNG, không cuộn ngang.
+        //
+        // Bản đầu bọc lưới trong `ScrollArea::horizontal`. Đo ở 1092×614 dip —
+        // đúng cỡ màn 1366×768 @125% của `DPI-04` — thì **4 trong 12 ô** nằm
+        // ngoài mép phải, và không cách nào tới được bằng bàn phím vì ô ảnh
+        // không nhận tiêu điểm.
+        //
+        // Hai điều hỏng cùng lúc, và điều thứ hai nặng hơn: lưới này tồn tại để
+        // người dùng **nhìn thấy** thứ sắp mất. Giấu một phần ba số ảnh sau một
+        // cú cuộn ngang là bỏ đi đúng phần ma sát mà nó sinh ra để tạo — người
+        // ta đếm tám ô rồi tưởng mình đã nhìn hết.
+        //
+        // Chia hàng bằng tay chứ không dùng `horizontal_wrapped`: mỗi ô là một
+        // `ui.vertical` lồng trong, mà egui chỉ ngắt dòng theo **widget rời**,
+        // không theo bố cục con. Đã thử và đo — `horizontal_wrapped` cho ra
+        // đúng cái bố cục tràn như cũ.
+        let buoc = canh + ui.spacing().item_spacing.x;
+        let moi_hang =
+            (((ui.available_width() + ui.spacing().item_spacing.x) / buoc).floor() as usize).max(1);
+        let mut dau_hang = 0usize;
+        while dau_hang < self.o_anh.len() {
+            let cuoi_hang = (dau_hang + moi_hang).min(self.o_anh.len());
+            ui.horizontal(|ui| {
+                for (i, o) in self.o_anh.iter().enumerate().take(cuoi_hang).skip(dau_hang) {
+                    ui.vertical(|ui| {
+                        match &o.anh {
+                            Some(a) if a.rong > 0 => {
+                                let tex = self.ket_cau[i].get_or_insert_with(|| {
+                                    let ci = egui::ColorImage::from_rgba_unmultiplied(
+                                        [a.rong, a.cao],
+                                        &a.diem,
                                     );
-                                    ui.painter().rect_stroke(
-                                        r,
-                                        2.0,
-                                        egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
-                                    );
-                                    ui.painter().text(
-                                        r.center(),
-                                        egui::Align2::CENTER_CENTER,
-                                        "?",
-                                        egui::FontId::proportional(28.0),
-                                        ui.visuals().text_color(),
-                                    );
-                                }
+                                    ui.ctx().load_texture(
+                                        format!("xt{i}"),
+                                        ci,
+                                        egui::TextureOptions::LINEAR,
+                                    )
+                                });
+                                ui.image((tex.id(), tex.size_vec2()));
                             }
-                            let ten = o
-                                .duong_dan
-                                .file_name()
-                                .map(|x| x.to_string_lossy().to_string())
-                                .unwrap_or_default();
-                            let ngan: String = ten.chars().take(14).collect();
-                            ui.small(ngan);
-                        });
-                    }
-                });
+                            _ => {
+                                // Ô dấu hỏi. Vẫn chiếm đúng chỗ của một ảnh
+                                // để người dùng thấy rõ là có một tệp ở đây.
+                                let (r, _) = ui.allocate_exact_size(
+                                    egui::vec2(canh, canh),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter().rect_stroke(
+                                    r,
+                                    2.0,
+                                    egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
+                                );
+                                ui.painter().text(
+                                    r.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    "?",
+                                    egui::FontId::proportional(28.0),
+                                    ui.visuals().text_color(),
+                                );
+                            }
+                        }
+                        let ten = o
+                            .duong_dan
+                            .file_name()
+                            .map(|x| x.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        let ngan: String = ten.chars().take(14).collect();
+                        ui.small(ngan);
+                    });
+                }
             });
+            dau_hang = cuoi_hang;
+        }
         // RB-43: dòng này KHÔNG được nhỏ hơn chữ thường và KHÔNG được xám. Mười
         // hai ảnh trông như một bằng chứng đầy đủ nếu thiếu nó.
         ui.label(crate::anh::dong_ty_le_mau(self.o_anh.len(), tong));
@@ -1041,7 +1056,7 @@ impl UngDung {
         }
 
         ui.add_space(10.0);
-        let nut = ui.add_enabled(du_cho, egui::Button::new("Bắt đầu sao lưu"));
+        let nut = nut_co_the_tat(ui, du_cho, "Bắt đầu sao lưu");
         if !du_cho {
             nut.on_disabled_hover_text("nhập thư mục đích có đủ chỗ trống");
         } else if nut.clicked() {
@@ -1407,6 +1422,53 @@ impl UngDung {
 
 // ==================================================================== tiện ích
 
+/// Nút **có thể bị tắt**, dựng sao cho nó không nuốt mất một chặng Tab.
+///
+/// # Vì sao không dùng thẳng `ui.add_enabled`
+///
+/// egui 0.29 có một lỗ ở `Context::create_widget`:
+///
+/// ```text
+/// if allow_focus && w.sense.focusable {
+///     ctx.memory.interested_in_focus(w.id);      // chạy cho CẢ widget đang tắt
+/// }
+/// if allow_focus && (!w.enabled || …) {
+///     mem.surrender_focus(w.id);                 // rồi lấy lại ngay
+/// }
+/// ```
+///
+/// Widget đang tắt vẫn **giành** tiêu điểm ở bước một — vì `give_to_next` đang
+/// bật sau khi người dùng gõ Tab — rồi bị tước ở bước hai. Chặng Tab tiêu vào
+/// khoảng giữa, `give_to_next` đã tắt, nên widget đứng **sau** nút tắt không
+/// bao giờ nhận được tiêu điểm.
+///
+/// Đo tận nơi trên giao diện thật, không phải suy từ mã:
+///
+/// | Màn sao lưu | Vòng Tab đo được |
+/// |---|---|
+/// | "Bắt đầu sao lưu" đang TẮT | ô nhập → radio → radio → *(rỗng)* → ô nhập |
+/// | "Bắt đầu sao lưu" đã BẬT   | ô nhập → radio → radio → Bắt đầu → ← Quay lại |
+///
+/// Nút `← Quay lại` **biến mất khỏi bàn phím** ở dòng trên. Chỗ này còn nặng
+/// hơn ở trang chủ: `Lấy lại dung lượng ổ đĩa` tắt khi máy chưa cài Zalo, và
+/// hai nút sau nó chết theo — cả màn hình không dùng được bằng bàn phím.
+///
+/// Nút đang tắt thì đằng nào cũng không giữ nổi tiêu điểm, nên khai thẳng nó
+/// **không nhận tiêu điểm** là không mất gì, mà chuỗi Tab thì liền lại.
+/// `on_disabled_hover_text` vẫn chạy — nó chỉ cần con trỏ rê qua (`ĐM-06`).
+fn nut_co_the_tat(
+    ui: &mut egui::Ui,
+    bat: bool,
+    nhan: impl Into<egui::WidgetText>,
+) -> egui::Response {
+    let n = egui::Button::new(nhan);
+    if bat {
+        ui.add(n)
+    } else {
+        ui.add_enabled(false, n.sense(egui::Sense::hover()))
+    }
+}
+
 fn bao_cao_xoa(r: &zalo_core::act::KetQuaXoa, thu_muc_rong: usize) -> Vec<String> {
     let mut v = vec![
         format!("Đã xóa       : {} tệp", so(r.da_xoa as i64)),
@@ -1564,6 +1626,93 @@ fn co(byte: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Chạy một khung egui thật với ba nút, nút giữa **đang tắt**, rồi trả về
+    /// mã của ba nút cùng ngữ cảnh để bơm phím Tab vào.
+    fn ba_nut(tat_bang_helper: bool) -> (egui::Context, Vec<egui::Id>) {
+        let ctx = egui::Context::default();
+        ctx.set_fonts(egui::FontDefinitions::empty());
+        let v = std::cell::RefCell::new(Vec::new());
+        let _ = ctx.run(egui::RawInput::default(), |c| {
+            egui::CentralPanel::default().show(c, |ui| {
+                v.borrow_mut().push(ui.button("một").id);
+                let giua = if tat_bang_helper {
+                    nut_co_the_tat(ui, false, "hai")
+                } else {
+                    ui.add_enabled(false, egui::Button::new("hai"))
+                };
+                v.borrow_mut().push(giua.id);
+                v.borrow_mut().push(ui.button("ba").id);
+            });
+        });
+        (ctx, v.into_inner())
+    }
+
+    fn go_tab(ctx: &egui::Context, tat_bang_helper: bool) {
+        let mut vao = egui::RawInput::default();
+        vao.events.push(egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        let _ = ctx.run(vao, |c| {
+            egui::CentralPanel::default().show(c, |ui| {
+                let _ = ui.button("một");
+                let _ = if tat_bang_helper {
+                    nut_co_the_tat(ui, false, "hai")
+                } else {
+                    ui.add_enabled(false, egui::Button::new("hai"))
+                };
+                let _ = ui.button("ba");
+            });
+        });
+    }
+
+    /// **BP-01, cổng mức 1.** Nút đứng SAU một nút đang tắt vẫn phải tới được
+    /// bằng Tab.
+    ///
+    /// Đây là phép thử đáng lẽ phải có từ mốc M5. Không có nó, giao diện ra
+    /// bản phát hành với ba màn hình mà bàn phím không đi hết được, trong đó
+    /// có trang chủ khi máy chưa cài Zalo. Xem [`nut_co_the_tat`].
+    #[test]
+    fn nut_dang_tat_khong_duoc_nuot_mat_mot_chang_tab() {
+        let (ctx, id) = ba_nut(true);
+        go_tab(&ctx, true);
+        assert_eq!(
+            ctx.memory(|m| m.focused()),
+            Some(id[0]),
+            "Tab đầu tiên không vào nút thứ nhất"
+        );
+        go_tab(&ctx, true);
+        assert_eq!(
+            ctx.memory(|m| m.focused()),
+            Some(id[2]),
+            "Tab thứ hai không tới được nút ĐỨNG SAU nút đang tắt — chặng Tab đã bị nuốt"
+        );
+    }
+
+    /// Ghim **lỗ của egui 0.29**, thứ mà [`nut_co_the_tat`] sinh ra để vá.
+    ///
+    /// `Context::create_widget` gọi `interested_in_focus` cho cả widget đang
+    /// tắt rồi mới `surrender_focus`, nên chặng Tab tiêu mất ở khoảng giữa.
+    ///
+    /// Ngày nào egui vá chỗ ấy thì phép thử này **đỏ**, và người nâng phiên bản
+    /// buộc phải đọc lại đoạn này rồi bỏ hẳn cái vá đi thay vì để nó nằm lại
+    /// mãi như một câu bùa không ai dám động.
+    #[test]
+    fn egui_029_van_con_nuot_chang_tab_o_nut_tat() {
+        let (ctx, id) = ba_nut(false);
+        go_tab(&ctx, false);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(id[0]));
+        go_tab(&ctx, false);
+        assert_eq!(
+            ctx.memory(|m| m.focused()),
+            None,
+            "egui đã tự vá chỗ này — bỏ `nut_co_the_tat` đi và dùng lại `add_enabled`"
+        );
+    }
 
     /// **VM-01, cổng mức 1.** Chuỗi phải giống hệt nhau ở mọi vùng miền.
     ///

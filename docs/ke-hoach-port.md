@@ -133,8 +133,8 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
-| **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **3,61 MiB** · **60** phép thử giao diện · ba việc còn nợ **đã làm xong** · **§8.1-1 đã tự động hóa và đạt 8/8** trên giao diện thật · còn **9 mục mức 1** cần người thật |
-| **M6** Phát hành | ◐ **sẵn sàng, CỐ Ý CHƯA CÔNG BỐ** | Máy móc phát hành đã xong và đã kiểm: CI dựng, mã băm khớp cả 5 tệp, hai exe chạy được từ đúng bản tải về. **Chưa gắn thẻ** vì 9 mục tiếp cận mức 1 của M5 chưa ai kiểm, mà luật của hội đồng ghi mức 1 chặn hẳn bản phát hành. Cổng tái lập không đạt → chốt **phương án A** |
+| **M5** Giao diện | ◐ **gần xong** | exe **3,61 MiB** · **62** phép thử giao diện · **§8.1-1 đạt 8/8** · **`kiem-muc-1.ps1` đã đo 7 trong 9 mục mức 1 trên giao diện thật, bắt được 2 lỗi và đã sửa cả hai** · còn `BP-01` cần máy yên tĩnh, `ĐM-08` cần NVDA thật, và ba mục greyscale cần **ba người thử** |
+| **M6** Phát hành | ◐ **sẵn sàng, CỐ Ý CHƯA CÔNG BỐ** | Máy móc phát hành đã xong và đã kiểm: CI dựng, mã băm khớp cả 5 tệp, hai exe chạy được từ đúng bản tải về. **Chưa gắn thẻ** vì mục tiếp cận mức 1 của M5 chưa xong hết, mà luật của hội đồng ghi mức 1 chặn hẳn bản phát hành. Cổng tái lập không đạt → chốt **phương án A** |
 
 ## M0 · Khung sườn — ✅ đạt
 
@@ -314,11 +314,105 @@ An toàn của bản dòng lệnh đến phần lớn từ ma sát. Giao diện 
 
 **Lõi chưa có đường hủy.** `BP-08` đòi Esc dừng được lượt xóa đang chạy và nhật ký ghi "đã hủy giữa chừng". Đã thêm cờ hủy vào `act::xoa`, kèm phép thử: dừng ngay, `hoan_tat = false`, và nhật ký ghi đúng — thiếu vế cuối là người dùng bấm Esc rồi mở nhật ký thấy `hoàn tất=True`.
 
-### Chín mục MỨC 1 CHƯA kiểm — cần người thật ngồi trước màn hình
+### Chín mục MỨC 1 — tám trong số đó hóa ra ĐO ĐƯỢC BẰNG MÁY
 
-Bộ chạy [`rust/tools/cong-m5.ps1`](../rust/tools/cong-m5.ps1) **in thẳng tên** chín mục này sau mỗi lần chạy. Một cổng chỉ báo cáo phần nó đo được sẽ đọc ra như "đã đạt hết", và đó là cách một bản phát hành đi ra ngoài với mục mức 1 chưa ai kiểm.
+Chín mục này từng mang nhãn *"không cỗ máy nào kết luận được"*. Lý do ấy **sai một nửa**, và chỉ cần thử mới biết.
 
-`§8.1-2` ảnh greyscale 3 người thử · `§8.1-3` gõ `XOÁ` bằng Unikey · `BP-01` chỉ dùng bàn phím · `BP-04` giam tiêu điểm · `DPI-04` màn 1366×768 · `DPI-08` canh giữa cửa sổ cha · `MAU-01` · `MAU-09` · `ĐM-08`.
+egui bật `accesskit`, mà AccessKit phơi **toàn bộ cây widget** ra UI Automation của Windows — kèm tên, vai trò, trạng thái bật/tắt và khung bao theo tọa độ màn hình. Tức là hỏi được bằng máy đúng những câu tưởng phải nhìn bằng mắt:
+
+| Câu hỏi | Hỏi ai |
+|:---|:---|
+| Tiêu điểm đang nằm ở phần tử nào | `AutomationElement::FocusedElement` |
+| Nút Xóa đã bật chưa | `IsEnabled` |
+| Phần tử nào tràn khỏi vùng vẽ | `BoundingRectangle` so với `GetClientRect` |
+| Hai nút cách nhau bao nhiêu dip | cùng nguồn |
+
+[`rust/tools/kiem-muc-1.ps1`](../rust/tools/kiem-muc-1.ps1) lái giao diện **thật** trong hộp cát `%TEMP%` và đo hết. Nó bắt được **hai lỗi mà cả mốc M5 không bắt được**.
+
+#### Lỗi ① — `DPI-04`: một phần ba số ảnh xem trước nằm ngoài màn hình
+
+Đo ở **1092×614 dip**, đúng cỡ vùng vẽ của màn 1366×768 @125%: **4 trong 12 ô ảnh** nằm ngoài mép phải, ô thứ tám bị cắt đôi. Lưới nằm trong một `ScrollArea::horizontal`, nên về kỹ thuật là "cuộn tới được" — nhưng `DPI-04` cấm đúng chuyện đó, và ô ảnh **không nhận tiêu điểm**, nên bằng bàn phím thì không cuộn tới được thật.
+
+Nặng hơn phần chữ nghĩa: lưới ấy tồn tại để người dùng **nhìn thấy** thứ sắp mất. Giấu một phần ba số ảnh sau một cú cuộn ngang là bỏ đi đúng phần ma sát nó sinh ra để tạo — người ta đếm tám ô rồi tưởng đã nhìn hết.
+
+Đã sửa: chia hàng tường minh theo bề rộng còn trống. Không dùng `horizontal_wrapped` — đã thử và đo, egui chỉ ngắt dòng theo **widget rời**, không theo bố cục con, mà mỗi ô là một `ui.vertical` lồng trong. Sau khi sửa: đủ 12 ô trên hai hàng, **0 phần tử tràn trên cả 8 màn hình**.
+
+#### Lỗi ② — `BP-01`: nút đứng sau một nút đang tắt biến mất khỏi bàn phím
+
+Đo trên màn sao lưu:
+
+| "Bắt đầu sao lưu" | Vòng Tab đo được |
+|:---|:---|
+| đang **TẮT** | ô nhập → radio → radio → *(rỗng)* → ô nhập |
+| đã **BẬT** | ô nhập → radio → radio → Bắt đầu → ← Quay lại |
+
+Nút `← Quay lại` **không bao giờ nhận được tiêu điểm** ở dòng trên. Nguyên nhân đọc thẳng trong mã nguồn egui 0.29, `Context::create_widget`:
+
+```rust
+if allow_focus && w.sense.focusable {
+    ctx.memory.interested_in_focus(w.id);      // chạy cho CẢ widget đang tắt
+}
+if allow_focus && (!w.enabled || …) {
+    mem.surrender_focus(w.id);                 // rồi lấy lại ngay
+}
+```
+
+Widget đang tắt **giành** tiêu điểm ở bước một — vì `give_to_next` đang bật sau khi người dùng gõ Tab — rồi bị tước ở bước hai. Chặng Tab tiêu vào khoảng giữa.
+
+Dính **ba màn**, và chỗ nặng nhất không phải màn sao lưu mà là **trang chủ**: `Lấy lại dung lượng ổ đĩa` tắt khi máy chưa cài Zalo, và cả hai nút sau nó chết theo — toàn bộ trang chủ không dùng được bằng bàn phím.
+
+Đã vá bằng `nut_co_the_tat`: nút đang tắt khai thẳng là **không nhận tiêu điểm** (`Sense::hover()`). Nó vốn không giữ nổi tiêu điểm nên không mất gì, mà chuỗi Tab thì liền lại. Kèm **hai** phép thử chạy vòng lặp egui thật và bơm phím Tab vào: một phép canh bản vá, một phép **ghim lỗ của egui** để ngày egui tự sửa thì nó đỏ lên và người nâng phiên bản buộc phải bỏ bản vá đi thay vì để nó nằm lại như một câu bùa.
+
+#### Kết quả đo được, từng mục
+
+| Mục | Kết quả |
+|:---|:---|
+| **`DPI-01`** *(mức 1, **lọt sổ** — không có trong danh sách chín mục, cũng không có trong cổng M5)* | ✅ tiến trình chạy `PER_MONITOR_AWARE_V2`, đo bằng `AreDpiAwarenessContextsEqual`. Kho mã không có tệp manifest nào — winit đặt lúc chạy |
+| **`DPI-04`** | ❌→✅ 8/8 màn hình, 0 phần tử tràn ở 1092×614 dip |
+| **`DPI-08`** | ✅ không cửa sổ nào ngoài cửa sổ chính phơi ra widget · ba widget của trang xác nhận nằm gọn trong vùng vẽ · cùng màn hình với cửa sổ cha |
+| **`BP-04`** | ✅ 30 chặng Tab rơi đúng vào 2 phần tử của trang xác nhận, không chặng nào thoát ra · không widget nào của màn trước còn sống |
+| **`§8.1-3`** | ✅ 5/5 |
+| **`MAU-01`** | ✅ 4/4 phần máy. Ký hiệu ↔ câu chữ khớp một-một; trên **ảnh đã bỏ màu**, mỗi mức vẽ ra một hình riêng, và hai dòng cùng mức vẽ ra cùng một hình |
+| **`MAU-09`** | ✅ 4/4 phần máy. Khác chữ, khác biểu tượng, cách nhau **48 dip**, `Hủy` đứng trước theo thứ tự đọc |
+| **`ĐM-08`** | ✅ 5/5 phần máy. Dải hiện ra, nói đúng câu, nút bật, **dải vẫn hiện khi đã đi sâu vào giữa luồng**, và bấm thì `zalo-cli.exe` chạy lên thật |
+| **`BP-01`** | ◐ lỗi đã sửa, nhưng **chưa chạy trọn được kịch bản** |
+
+##### Bốn kiểu gõ của §8.1-3, vì nó là mục dễ tưởng đã kiểm nhất
+
+Unikey không "gõ tiếng Việt"; ở bước cuối nó đẩy vào ứng dụng một chuỗi `Backspace` cộng ký tự đã ghép. Bộ chạy gửi **đúng chuỗi ấy** bằng `SendInput` với `KEYEVENTF_UNICODE`:
+
+| Cách gõ | Chuỗi thật đẩy vào | Nút xóa |
+|:---|:---|:---|
+| kiểu **mới**, dấu trên A | `X` `O` `A` `⌫` `Á` | **bật** |
+| kiểu **cũ**, dấu trên O | `X` `O` `A` `⌫⌫` `Ó` `A` | **bật** |
+| không dấu | `X` `O` `A` | **bật** |
+| tổ hợp NFD | `X` `O` `A` `U+0301` | **bật** |
+| chữ thường, kiểu mới | `x` `o` `a` `⌫` `á` | **tắt** ✓ đúng `TV-01` |
+
+#### `BP-01` — chạy được tới đâu, và vì sao dừng
+
+Phần đo được đã đo: vòng Tab của **mọi** màn hình giờ liền mạch sau khi vá `nut_co_the_tat`. Nhưng kịch bản đầy đủ mà hội đồng đòi — *chọn nguồn → quét → xem → sao lưu → xóa → xem nhật ký*, rút chuột ra — **chưa chạy trọn được lần nào**, vì lý do nằm ngoài công cụ.
+
+Nó phải chiếm bàn phím của **cả máy** trong vài phút. Máy đang có người dùng, và một lượt chạy đã bị Chrome giành mất tiền cảnh **giữa** lúc kiểm và lúc gửi phím. Phần sao lưu gõ đường dẫn vào ô nhập — phím lạc sang một bảng tính đang mở là hỏng dữ liệu thật của người khác.
+
+Đã siết ba lớp trong bộ chạy, nhưng không lớp nào xóa được rủi ro ấy:
+
+- kiểm tiền cảnh **cả trước lẫn sau** mỗi lô phím, lệch là dừng ngay
+- bỏ hẳn `Ctrl+A`; hỏi UIA xem ô nhập đang có bao nhiêu ký tự rồi xóa đúng bấy nhiêu
+- ba phần **không** phải phép thử bàn phím (`MAU-01`, `MAU-09`, `ĐM-08`) chuyển sang đi bằng `InvokePattern` của UIA, không gõ phím toàn cục, chạy lúc nào cũng được
+
+Còn lại là **một cửa sổ máy yên tĩnh**, không phải một dòng mã.
+
+#### Một chuyện chưa truy tới cùng, ghi lại chứ không lấp
+
+Trong lúc dựng bộ chạy, ứng dụng **tự thoát** vài lần giữa chừng. Đo lặp 5 lượt mỗi nhánh, cùng kịch bản:
+
+| Bộ chạy gọi `SetFocus` lên cửa sổ | Ứng dụng tự thoát |
+|:---|---:|
+| có | **1/5** |
+| không | **0/5** |
+
+Thoát **sạch** — không bản ghi sự cố nào trong nhật ký Ứng dụng của Windows — nên là vòng lặp sự kiện kết thúc chứ không phải sập. Bộ chạy đã bỏ `SetFocus` (nó vốn thừa: `SetForegroundWindow` cộng `SetActiveWindow` đã đủ đưa cửa sổ lên). Nhưng **cơ chế thì chưa truy ra**, và người dùng thật vẫn có thể gặp: trình đọc màn hình, tiện ích "luôn nằm trên", điều khiển từ xa đều gọi những hàm ấy. Mẫu 5 lượt quá nhỏ để kết luận. Đây là việc còn nợ, không phải việc đã xong.
 
 ### Ba việc từng nợ, giờ đã làm xong
 
@@ -358,13 +452,16 @@ Hai lần bộ chạy này báo hỏng, **cả hai đều là lỗi của chính
 
 ### Việc M5 còn lại, nói thẳng
 
-| Việc | Hậu quả đo được |
-|:---|:---|
-| **Không có bộ giải mã JPEG XL** | `.jxl` chiếm **46,4%** dữ liệu Zalo thật. Chúng hiện nhãn "ảnh JPEG XL" chứ chưa có ảnh thu nhỏ, nên ma sát xem trước yếu đi đúng phần ấy |
-| **Chưa có màn sao lưu và khôi phục trong giao diện** | Hai việc đó vẫn phải làm bằng bản dòng lệnh hoặc bản PowerShell |
-| **`ĐM-08` chưa cài** | Bật trình đọc màn hình chưa hiện dải thông báo và nút mở bản dòng lệnh. Đây là mục MỨC 1 |
+Bảng ở đây từng liệt kê ba việc — JPEG XL, màn sao lưu/khôi phục, `ĐM-08`. **Cả ba đã xong**; xem mục *"Ba việc từng nợ"* ở trên. Còn lại đúng bốn việc, và không việc nào là mã:
 
-Đây là thứ duy nhất còn chặn M5, và nó chặn bằng người chứ không bằng mã.
+| Việc | Cần gì | Vì sao máy không làm thay được |
+|:---|:---|:---|
+| **`BP-01`** chạy trọn kịch bản bằng bàn phím | một cửa sổ **máy yên tĩnh** vài phút | Bộ chạy phải chiếm bàn phím của cả máy; phím lạc sang cửa sổ khác là hỏng việc thật của người dùng |
+| **`§8.1-2` · `MAU-01` · `MAU-09`** | **ba người thử** nhìn bộ ảnh greyscale đã sinh sẵn | Máy đo được ký hiệu, câu chữ, hình sau khi bỏ màu, vị trí và khoảng cách. Nó **không** đo được người ta có *hiểu* không |
+| **`ĐM-08`** với NVDA thật | cài NVDA | Máy này chưa cài. Đã đo trọn đường dò và đường lui bằng cờ `SPI_SETSCREENREADER`, nhưng đó là cờ chứ không phải NVDA |
+| Truy nốt vụ **ứng dụng tự thoát** | thêm số đo | Mẫu 5 lượt quá nhỏ. Xem mục ngay trên |
+
+Một chỗ nữa, không phải mục mức 1 nhưng lộ ra trong lúc đo và đáng ghi: **mức rủi ro giữa — `Cần cân nhắc` — không có lối nào tới từ bản đồ họa.** Nó thuộc `CACHE HỆ THỐNG`, mà giao diện chưa mở lối quét ấy. Nghĩa là ba người thử của `MAU-01` chỉ xếp được **hai** mức chứ không phải ba, và câu "33/33" của hội đồng phải đọc lại theo đúng phạm vi ấy.
 
 ## M6 · Phát hành — ✗ cổng KHÔNG đạt, và đây là lý do đo được
 

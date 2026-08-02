@@ -35,17 +35,37 @@ function Assert($ma, $ten, $ok, $chi_tiet) {
 
 # Các mục MỨC 1 mà một cỗ máy không kết luận được. Danh sách này KHÔNG được rút
 # ngắn cho đẹp báo cáo — rút ngắn nó là giấu đi phần chưa ai kiểm.
+#
+# ---------------------------------------------------------------------------
+# DANH SÁCH NÀY TỪNG CÓ CHÍN MỤC, VÀ TÁM TRONG SỐ ĐÓ ĐO ĐƯỢC BẰNG MÁY.
+#
+# Lý do cũ — "không cỗ máy nào kết luận được" — sai một nửa. egui bật
+# `accesskit`, mà AccessKit phơi toàn bộ cây widget ra UI Automation của
+# Windows kèm tên, vai trò, trạng thái bật/tắt và khung bao. Hỏi được bằng máy
+# đúng những câu tưởng phải nhìn bằng mắt.
+#
+# `tools\kiem-muc-1.ps1` lái giao diện THẬT trong hộp cát và đo hết. Nó bắt
+# được hai lỗi mà chín tháng "chờ người kiểm" không bắt được:
+#
+#   · DPI-04 — lưới ảnh xem trước tràn khỏi mép phải ở 1092×614 dip, 4 trong
+#     12 ô nằm ngoài, sau một thanh cuộn ngang không ai thấy.
+#   · BP-01 — egui 0.29 để widget đang TẮT nuốt mất một chặng Tab, nên widget
+#     đứng sau nó không bao giờ nhận được tiêu điểm. Dính ba màn, nặng nhất là
+#     trang chủ khi máy chưa cài Zalo: cả màn hình chết với bàn phím.
+#
+# Cả hai đã sửa. Bài học cũ, lần thứ tám: **đoán thì không bắt được gì.**
+# ---------------------------------------------------------------------------
 $canNguoiThat = @(
-    @{ Ma = '§8.1-2'; Viec = 'Ảnh chụp greyscale, 3 người thử phân loại mức rủi ro → 33/33 đúng'; ChuY = 'MAU-01' }
-    @{ Ma = '§8.1-3'; Viec = 'Gõ XOÁ bằng Unikey kiểu đặt dấu mới → nút Xóa bật'; ChuY = 'Cần bộ gõ thật; phần so chuỗi đã có phép thử' }
-    @{ Ma = 'BP-01';  Viec = 'Rút chuột, chạy trọn kịch bản chỉ bằng bàn phím'; ChuY = '' }
-    @{ Ma = 'BP-04';  Viec = 'Hộp thoại giam tiêu điểm — nhấn Tab 30 lần, tiêu điểm không thoát ra ngoài'; ChuY = '' }
-    @{ Ma = 'DPI-04'; Viec = 'Vừa màn 1366×768 @125%, không cuộn ngang ở mọi màn hình'; ChuY = 'Cỡ cửa sổ đã ràng buộc trong mã' }
-    @{ Ma = 'DPI-08'; Viec = 'Trang xác nhận mở canh giữa cửa sổ cha, cùng màn hình'; ChuY = '' }
-    @{ Ma = 'MAU-01'; Viec = 'Bỏ hết màu vẫn hiểu — 3 người thử, 33/33'; ChuY = 'Chữ và ký hiệu đã có phép thử; phần người đọc thì chưa' }
-    @{ Ma = 'MAU-09'; Viec = 'Ảnh greyscale, người thử chỉ đúng nút Hủy'; ChuY = '' }
-    @{ Ma = 'ĐM-08';  Viec = 'Bật NVDA thật → dải thông báo hiện ra và nút mở bản dòng lệnh chạy'
-       ChuY = 'ĐÃ CÀI; phần dò và phần mở đã có phép thử, phần "bật NVDA thật" thì chưa' }
+    @{ Ma = 'BP-01';  Viec = 'Chạy TRỌN kịch bản chỉ bằng bàn phím, từ chọn nguồn tới xem nhật ký'
+       ChuY = 'Bộ chạy đã có, nhưng nó chiếm bàn phím của cả máy vài phút. Cần một cửa sổ máy YÊN TĨNH — phím lạc sang cửa sổ khác là hỏng việc thật. Vòng Tab của mọi màn đã đo và đã sửa xong.' }
+    @{ Ma = '§8.1-2'; Viec = 'Ba người thử nhìn ảnh greyscale và xếp đúng mức rủi ro → 33/33'
+       ChuY = 'Ảnh đã sinh sẵn bằng kiem-muc-1.ps1. Chỉ còn phần MẮT NGƯỜI.' }
+    @{ Ma = 'MAU-01'; Viec = 'Cùng bộ ảnh trên, phần người đọc'
+       ChuY = 'Máy đã đo: ký hiệu ↔ câu chữ khớp một-một, và sau khi bỏ màu mỗi mức vẫn vẽ ra một hình riêng.' }
+    @{ Ma = 'MAU-09'; Viec = 'Người thử nhìn ảnh greyscale và chỉ đúng nút Hủy'
+       ChuY = 'Máy đã đo: khác chữ, khác biểu tượng, cách nhau 48 dip, Hủy đứng trước.' }
+    @{ Ma = 'ĐM-08';  Viec = 'Bật NVDA THẬT rồi xem dải thông báo có hiện không'
+       ChuY = 'Máy này CHƯA CÀI NVDA. Đường dò, dải thông báo và nút mở bản dòng lệnh đã đo trên giao diện thật với cờ SPI_SETSCREENREADER. Chạy kiem-muc-1.ps1 -KemNarrator để thử bằng Narrator của Windows.' }
 )
 
 Write-Host ''
@@ -138,10 +158,14 @@ Assert 'ĐM-08' 'Có dò trình đọc màn hình và đường lui sang bản d
     ((Test-Path (Join-Path $guiSrc 'duong_lui.rs')) -and $ud -match 've_dai_duong_lui') 'chưa nối vào giao diện'
 
 Write-Host ''
-Write-Host '── §8.1-1 — cần một phiên màn hình, không chạy được ở đây' -ForegroundColor Yellow
-Write-Host '   Đã tự động hóa và ĐÃ ĐẠT 8/8 trên hộp cát, nhưng nó lái chuột và bàn' -ForegroundColor DarkGray
-Write-Host '   phím thật nên không chạy được trên máy chủ CI hay trong lượt này.' -ForegroundColor DarkGray
-Write-Host '   Chạy tay:  powershell -File rust\tools\phep-thu-ma-sat.ps1' -ForegroundColor DarkGray
+Write-Host '── Hai bộ chạy cần một phiên màn hình, không chạy được ở đây' -ForegroundColor Yellow
+Write-Host '   Cả hai lái giao diện THẬT trong hộp cát, nên không chạy được trên máy' -ForegroundColor DarkGray
+Write-Host '   chủ CI. Chạy tay:' -ForegroundColor DarkGray
+Write-Host '     powershell -File rust\tools\phep-thu-ma-sat.ps1   §8.1-1, đã đạt 8/8' -ForegroundColor DarkGray
+Write-Host '     powershell -File rust\tools\kiem-muc-1.ps1        tám mục mức 1 còn lại' -ForegroundColor DarkGray
+Write-Host '   `kiem-muc-1.ps1` gõ phím THẬT ở ba phần BP-01, BP-04, §8.1-3. Đóng hết' -ForegroundColor DarkGray
+Write-Host '   ứng dụng khác trước khi chạy — phím lạc sang cửa sổ người ta là hỏng' -ForegroundColor DarkGray
+Write-Host '   việc thật. Ba phần còn lại đi bằng UIA, chạy lúc nào cũng an toàn.' -ForegroundColor DarkGray
 
 Write-Host ''
 Write-Host '── Mục MỨC 1 CẦN NGƯỜI THẬT — chưa kiểm' -ForegroundColor Yellow

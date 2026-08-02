@@ -134,7 +134,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
 | **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **3,61 MiB** · **60** phép thử giao diện · ba việc còn nợ **đã làm xong** · **§8.1-1 đã tự động hóa và đạt 8/8** trên giao diện thật · còn **9 mục mức 1** cần người thật |
-| **M6** Phát hành | ◐ **đóng theo phương án A** | Cổng tái lập **không đạt** — hai chỗ chặn nằm ngoài mã dự án. Chủ dự án chọn **A**: phát hành đúng tệp CI dựng kèm `SHA256SUMS`, đường kiểm chứng đến tận cùng đi qua bản `.ps1`. `P2-1` vẫn chưa quyết |
+| **M6** Phát hành | ◐ **sẵn sàng, CỐ Ý CHƯA CÔNG BỐ** | Máy móc phát hành đã xong và đã kiểm: CI dựng, mã băm khớp cả 5 tệp, hai exe chạy được từ đúng bản tải về. **Chưa gắn thẻ** vì 9 mục tiếp cận mức 1 của M5 chưa ai kiểm, mà luật của hội đồng ghi mức 1 chặn hẳn bản phát hành. Cổng tái lập không đạt → chốt **phương án A** |
 
 ## M0 · Khung sườn — ✅ đạt
 
@@ -407,6 +407,22 @@ Lỗi thứ ba là lỗi của chính bộ dựng tôi viết, và nó **không 
 | **A** | Nhận hiện trạng: phát hành đúng tệp CI dựng, kèm `SHA256SUMS.txt`. Mã băm chứng minh tệp không bị sửa **trên đường**, và bản `.ps1` vẫn là đường kiểm chứng đến tận cùng | 0 đồng, và tài liệu phát hành đã nói thẳng chuyện này |
 | **B** | Máy chủ tự quản với Visual Studio ghim phiên bản | Tiền và công bảo trì đều đặn |
 | **C** | Nhúng bản riêng của `glutin` đã vá cho tất định, rồi làm tiếp chặn ② | Ôm một nhánh riêng của thư viện ngoài — món nợ dài hạn |
+
+### Trạng thái: sẵn sàng, và CỐ Ý chưa công bố
+
+Máy móc phát hành đã xong và đã kiểm đầu-cuối:
+
+| | |
+|:---|:---|
+| CI dựng gói | ✅ `aac3e17` |
+| Mã băm khớp tệp thật | ✅ 5/5 |
+| `zalo-cli.exe` chạy từ bản tải về | ✅ chữ tiếng Việt đúng |
+| `zalo-gui.exe` chạy từ bản tải về | ✅ mở được cửa sổ |
+| Gắn thẻ và tạo Release công khai | ⛔ **chưa làm, có chủ đích** |
+
+Lý do dừng ở bước cuối: danh mục tiếp cận của hội đồng ghi **"Mức 1 chặn hẳn bản phát hành, không thương lượng"**, mà M5 còn **9 mục mức 1 chưa ai kiểm**. Công bố lúc này là bỏ qua một luật do chính dự án đặt ra.
+
+Đây là một quyết định, không phải một việc bị quên. Kiểm xong 9 mục ấy thì chỉ cần đẩy một thẻ `v*` — workflow tự dựng, tự băm, tự tạo Release. Không còn việc kỹ thuật nào phải làm.
 
 **Chủ dự án chọn A** (02/08/2026) — xem [`quyet-dinh.md`](quyet-dinh.md) §Q13. Lý do: dự án còn một đường khác cho cùng niềm tin ấy, và với người dùng thường nó mạnh hơn — bản `.ps1` đọc thẳng được, không cần dựng lại gì. B và C mua thêm một tầng cho nhóm người đã có sẵn một tầng.
 

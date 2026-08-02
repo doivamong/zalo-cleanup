@@ -202,6 +202,7 @@ impl UngDung {
 impl eframe::App for UngDung {
     fn update(&mut self, ctx: &egui::Context, _f: &mut eframe::Frame) {
         self.thu_tin(ctx);
+        self.esc_quay_lai(ctx);
         self.ve_dai_duong_lui(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| match self.man {
@@ -377,6 +378,32 @@ impl UngDung {
         if xong {
             self.viec = None;
         }
+    }
+
+    /// **BP-06.** Esc luôn là "lui một bước", trên mọi màn hình **trừ hai chỗ**.
+    ///
+    /// Hai chỗ trừ ra, và lý do:
+    ///
+    /// - **Trang xác nhận xóa** tự xử Esc lấy, vì ở đó Esc nghĩa là **hủy hẳn**
+    ///   lượt xóa chứ không phải lùi một màn.
+    /// - **Màn đang làm** cũng tự xử, vì ở đó Esc nghĩa là **dừng thao tác đang
+    ///   chạy** — thứ mà `BP-08` đòi.
+    ///
+    /// Đặt hai ngoại lệ ở đây, tường minh, thay vì để mỗi màn tự đoán: một phím
+    /// mang ba nghĩa khác nhau tùy chỗ thì phải viết cả ba nghĩa ra một chỗ.
+    fn esc_quay_lai(&mut self, ctx: &egui::Context) {
+        if matches!(self.man, ManHinh::XacNhanXoa | ManHinh::DangLam) {
+            return;
+        }
+        if !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            return;
+        }
+        self.man = match self.man {
+            ManHinh::TrangChu => ManHinh::TrangChu,
+            ManHinh::XemDanhSach => ManHinh::KetQuaQuet,
+            ManHinh::SaoLuu => ManHinh::KetQuaQuet,
+            _ => ManHinh::TrangChu,
+        };
     }
 
     /// **ĐM-08.** Dải thông báo đường lui, hiện trên **mọi** màn hình.

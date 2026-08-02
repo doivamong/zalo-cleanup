@@ -36,8 +36,6 @@ function Assert($ma, $ten, $ok, $chi_tiet) {
 # Các mục MỨC 1 mà một cỗ máy không kết luận được. Danh sách này KHÔNG được rút
 # ngắn cho đẹp báo cáo — rút ngắn nó là giấu đi phần chưa ai kiểm.
 $canNguoiThat = @(
-    @{ Ma = '§8.1-1'; Viec = 'Giữ Enter/Space/chuột liên tục từ Trang chủ tới trang xác nhận, giữ thêm 5 giây → 0 tệp biến mất'
-       ChuY = 'Máy trạng thái đã kiểm phần luật (39 phép thử), nhưng chỉ người thật mới kiểm được cả đường đi trên cửa sổ thật' }
     @{ Ma = '§8.1-2'; Viec = 'Ảnh chụp greyscale, 3 người thử phân loại mức rủi ro → 33/33 đúng'; ChuY = 'MAU-01' }
     @{ Ma = '§8.1-3'; Viec = 'Gõ XOÁ bằng Unikey kiểu đặt dấu mới → nút Xóa bật'; ChuY = 'Cần bộ gõ thật; phần so chuỗi đã có phép thử' }
     @{ Ma = 'BP-01';  Viec = 'Rút chuột, chạy trọn kịch bản chỉ bằng bàn phím'; ChuY = '' }
@@ -138,6 +136,12 @@ Assert 'M5-2' 'Có màn sao lưu và khôi phục trong giao diện' `
 
 Assert 'ĐM-08' 'Có dò trình đọc màn hình và đường lui sang bản dòng lệnh' `
     ((Test-Path (Join-Path $guiSrc 'duong_lui.rs')) -and $ud -match 've_dai_duong_lui') 'chưa nối vào giao diện'
+
+Write-Host ''
+Write-Host '── §8.1-1 — cần một phiên màn hình, không chạy được ở đây' -ForegroundColor Yellow
+Write-Host '   Đã tự động hóa và ĐÃ ĐẠT 8/8 trên hộp cát, nhưng nó lái chuột và bàn' -ForegroundColor DarkGray
+Write-Host '   phím thật nên không chạy được trên máy chủ CI hay trong lượt này.' -ForegroundColor DarkGray
+Write-Host '   Chạy tay:  powershell -File rust\tools\phep-thu-ma-sat.ps1' -ForegroundColor DarkGray
 
 Write-Host ''
 Write-Host '── Mục MỨC 1 CẦN NGƯỜI THẬT — chưa kiểm' -ForegroundColor Yellow

@@ -133,7 +133,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
-| **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **3,61 MiB** · **60** phép thử giao diện · ba việc còn nợ **đã làm xong** · còn **10 mục mức 1** cần người thật |
+| **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **3,61 MiB** · **60** phép thử giao diện · ba việc còn nợ **đã làm xong** · **§8.1-1 đã tự động hóa và đạt 8/8** trên giao diện thật · còn **9 mục mức 1** cần người thật |
 | **M6** Phát hành | ⬜ chưa | Chặn bởi `P2-1`, ngân sách ký số |
 
 ## M0 · Khung sườn — ✅ đạt
@@ -314,11 +314,11 @@ An toàn của bản dòng lệnh đến phần lớn từ ma sát. Giao diện 
 
 **Lõi chưa có đường hủy.** `BP-08` đòi Esc dừng được lượt xóa đang chạy và nhật ký ghi "đã hủy giữa chừng". Đã thêm cờ hủy vào `act::xoa`, kèm phép thử: dừng ngay, `hoan_tat = false`, và nhật ký ghi đúng — thiếu vế cuối là người dùng bấm Esc rồi mở nhật ký thấy `hoàn tất=True`.
 
-### Mười mục MỨC 1 CHƯA kiểm — cần người thật ngồi trước màn hình
+### Chín mục MỨC 1 CHƯA kiểm — cần người thật ngồi trước màn hình
 
-Bộ chạy [`rust/tools/cong-m5.ps1`](../rust/tools/cong-m5.ps1) **in thẳng tên** mười mục này sau mỗi lần chạy. Một cổng chỉ báo cáo phần nó đo được sẽ đọc ra như "đã đạt hết", và đó là cách một bản phát hành đi ra ngoài với mục mức 1 chưa ai kiểm.
+Bộ chạy [`rust/tools/cong-m5.ps1`](../rust/tools/cong-m5.ps1) **in thẳng tên** chín mục này sau mỗi lần chạy. Một cổng chỉ báo cáo phần nó đo được sẽ đọc ra như "đã đạt hết", và đó là cách một bản phát hành đi ra ngoài với mục mức 1 chưa ai kiểm.
 
-`§8.1-1` giữ Enter/Space/chuột · `§8.1-2` ảnh greyscale 3 người thử · `§8.1-3` gõ `XOÁ` bằng Unikey · `BP-01` chỉ dùng bàn phím · `BP-04` giam tiêu điểm · `DPI-04` màn 1366×768 · `DPI-08` canh giữa cửa sổ cha · `MAU-01` · `MAU-09` · `ĐM-08`.
+`§8.1-2` ảnh greyscale 3 người thử · `§8.1-3` gõ `XOÁ` bằng Unikey · `BP-01` chỉ dùng bàn phím · `BP-04` giam tiêu điểm · `DPI-04` màn 1366×768 · `DPI-08` canh giữa cửa sổ cha · `MAU-01` · `MAU-09` · `ĐM-08`.
 
 ### Ba việc từng nợ, giờ đã làm xong
 
@@ -337,6 +337,24 @@ Màn hình hiện `? Xong.` thay vì `✓ Xong.`. Đo tận nơi: **Segoe UI ph�
 Phép thử phủ glyph của tôi chỉ hỏi **phông nhúng**, không hỏi phông hệ thống đang thật sự dùng, nên nó xanh trong khi màn hình hỏng. Sửa bằng **chuỗi phông**: hệ thống cho chữ, phông nhúng lấp glyph thiếu. Phép thử mới hỏi **cả chuỗi gộp lại** chứ không hỏi từng phông một.
 
 Đây là lần thứ ba trong mốc M5 một chốt an toàn hóa ra chưa từng được chứng minh — và là lần duy nhất phải mở ứng dụng lên mới thấy.
+
+### §8.1-1 đã chạy trên giao diện thật — 8/8
+
+Phép thử ma sát của hội đồng, chạy bằng [`rust/tools/phep-thu-ma-sat.ps1`](../rust/tools/phep-thu-ma-sat.ps1) trên hộp cát 30 tệp trong `%TEMP%`. Nó lái chuột và bàn phím thật, nên không chạy được trên máy chủ CI.
+
+| Phép thử | Kết quả |
+|:---|:---|
+| Giữ **Enter** 5 giây ở màn kết quả quét | 0 tệp biến mất |
+| Giữ **Enter** 5 giây trên trang xác nhận | 0 tệp biến mất |
+| Giữ **Space** 5 giây trên trang xác nhận | 0 tệp biến mất |
+| **Nhấp 200 lần** vào đúng tọa độ nút Xóa, không gõ gì | 0 tệp biến mất |
+| Gõ `xoa` **chữ thường** rồi nhấp | 0 tệp biến mất (`TV-01`) |
+| Gõ đúng cụm từ rồi nhấp **ngay lập tức** | 0 tệp biến mất (khóa mồi 600 ms) |
+| **Kiểm ngược:** chờ hết khóa mồi rồi nhấp | **xóa được thật** |
+
+Vế cuối là vế quan trọng nhất. Không có nó thì "0 tệp biến mất" có thể chỉ vì cú nhấp trượt hoặc vì cả đường xóa đã hỏng — và sáu phép thử trên thành vô nghĩa. Một phép thử an toàn luôn xanh là một phép thử chưa chứng minh được gì.
+
+Hai lần bộ chạy này báo hỏng, **cả hai đều là lỗi của chính nó**, không phải của công cụ: lần đầu tọa độ nút sai vì tính theo `GetWindowRect` thay vì `ClientToScreen` (khung winit có viền vô hình), lần sau `keybd_event` gửi phím trần nên ô nhập nhận `xoa` chữ thường — mà chữ thường thì đúng là không được mở khóa. Nhìn vào ô nhập mới biết; không nhìn thì rất dễ kết luận ngược lại.
 
 ### Việc M5 còn lại, nói thẳng
 

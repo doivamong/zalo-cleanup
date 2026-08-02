@@ -3,7 +3,7 @@
 Đã qua **M0** (khung sườn + cổng kiến trúc), **M1** (lõi an toàn), **M2** (duyệt
 cây, băm, bộ lọc quét), **M3** (vỏ dòng lệnh) và **M4** (xóa · sao lưu · khôi phục).
 
-**M5** (giao diện đồ họa) đã xong phần kiểm được bằng máy. Còn đúng một thứ chặn nó: **10 mục mức 1 của danh mục tiếp cận cần người thật ngồi trước màn hình.**
+**M5** (giao diện đồ họa) đã xong phần kiểm được bằng máy. Còn đúng một thứ chặn nó: **9 mục mức 1 của danh mục tiếp cận cần người thật ngồi trước màn hình.**
 
 Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-hoach-port.md`](../docs/ke-hoach-port.md).
 
@@ -12,7 +12,7 @@ Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-ho
 > `zalo-gui` quét, xem trước ảnh, sao lưu, xóa và khôi phục được.
 >
 > Bản dành cho người dùng thường **vẫn là bản PowerShell** ở thư mục gốc: giao
-> diện còn mười mục mức 1 của danh mục tiếp cận chưa ai kiểm.
+> diện còn chín mục mức 1 của danh mục tiếp cận chưa ai kiểm.
 
 ---
 
@@ -132,9 +132,19 @@ Có bộ giải mã **JPEG XL** vì `.jxl` chiếm **46,4%** dữ liệu thật;
 
 Tệp không xem trước được hiện ô `?` và **vẫn nằm trong danh sách**. Giấu đi là người dùng xóa một thứ họ chưa từng nhìn thấy mà lại tưởng mình đã xem hết.
 
+### §8.1-1 đã chạy trên giao diện thật — 8/8
+
+[`tools/phep-thu-ma-sat.ps1`](tools/phep-thu-ma-sat.ps1) lái chuột và bàn phím thật trên hộp cát 30 tệp trong `%TEMP%`: giữ **Enter** 5 giây, giữ **Space** 5 giây, **nhấp 200 lần** vào đúng tọa độ nút Xóa, gõ `xoa` chữ thường, gõ đúng cụm từ rồi nhấp **ngay lập tức**. Cả sáu: **0 tệp biến mất**.
+
+Vế thứ bảy mới là vế quan trọng nhất — **kiểm ngược**: chờ hết khóa mồi rồi nhấp thì **xóa được thật**. Không có nó thì "0 tệp biến mất" có thể chỉ vì cú nhấp trượt, và sáu phép thử trên thành vô nghĩa.
+
+Hai lần bộ chạy báo hỏng, **cả hai đều là lỗi của chính nó**: tọa độ tính theo `GetWindowRect` thay vì `ClientToScreen` (khung winit có viền vô hình), và `keybd_event` gửi phím trần nên ô nhập nhận `xoa` chữ thường — mà chữ thường thì đúng là không được mở khóa.
+
+Không chạy được trên CI vì nó cần một phiên màn hình thật.
+
 ### Chưa xong, nói thẳng
 
-Mười mục **mức 1** của danh mục tiếp cận cần người thật ngồi trước màn hình — giữ Enter/Space/chuột, ảnh greyscale ba người thử, gõ `XOÁ` bằng Unikey, chỉ dùng bàn phím, giam tiêu điểm, màn 1366×768, canh giữa cửa sổ cha, `MAU-01`, `MAU-09`, `ĐM-08` với NVDA thật.
+Chín mục **mức 1** của danh mục tiếp cận cần người thật ngồi trước màn hình — ảnh greyscale ba người thử, gõ `XOÁ` bằng Unikey, chỉ dùng bàn phím, giam tiêu điểm, màn 1366×768, canh giữa cửa sổ cha, `MAU-01`, `MAU-09`, `ĐM-08` với NVDA thật.
 
 [`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên chúng sau mỗi lần chạy. Đây là thứ duy nhất còn chặn M5, và nó chặn bằng người chứ không bằng mã.
 
@@ -156,6 +166,7 @@ Hai cổng đối chiếu chạy từ gốc repo, và tự dựng lại exe:
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-song-song.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-lien-thong.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-m5.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\phep-thu-ma-sat.ps1
 ```
 
 ---

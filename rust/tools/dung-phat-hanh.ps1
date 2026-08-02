@@ -52,7 +52,21 @@ $cargoHome = $cargoHome.TrimEnd('\')
 #    `link.exe` của MSVC không ghim được từ repo. `rust-lld` thì có: nó đi kèm
 #    đúng bộ toolchain mà `rust-toolchain.toml` đã ghim, nên ghim rustc là ghim
 #    luôn trình liên kết.
-$sysroot = (& rustc --print sysroot).Trim()
+#    HỎI SYSROOT TỪ BÊN TRONG `rust\`, không phải từ thư mục hiện tại.
+#
+#    `rust-toolchain.toml` chỉ có hiệu lực với lệnh chạy trong cây thư mục chứa
+#    nó. Bản đầu của script này hỏi `rustc --print sysroot` ở thư mục gốc repo,
+#    nơi không có tệp ghim, rồi mới `Push-Location` vào `rust\`.
+#
+#    Máy phát triển không lộ ra vì toolchain mặc định của nó cũng là 1.94.1.
+#    Trên CI thì mặc định là 1.97.1, nên nó lấy `rust-lld` của 1.97.1 đi liên
+#    kết mã do 1.94.1 biên dịch — hai bản khác nhau, và đó là một phần lý do
+#    băm không khớp.
+Push-Location $rust
+try {
+    $sysroot = (& rustc --print sysroot).Trim()
+    $banRustc = (& rustc --version).Trim()
+} finally { Pop-Location }
 $lld = Join-Path $sysroot 'lib\rustlib\x86_64-pc-windows-msvc\bin\rust-lld.exe'
 if (-not (Test-Path $lld)) { throw "Không thấy rust-lld ở $lld" }
 
@@ -66,8 +80,8 @@ $co = @(
 
 Write-Host "Gốc mã nguồn : $goc" -ForegroundColor DarkGray
 Write-Host "CARGO_HOME   : $cargoHome" -ForegroundColor DarkGray
-Write-Host "rustc        : $((& rustc --version).Trim())" -ForegroundColor DarkGray
-Write-Host "Trình liên kết: rust-lld đi kèm toolchain" -ForegroundColor DarkGray
+Write-Host "rustc        : $banRustc" -ForegroundColor DarkGray
+Write-Host "Trình liên kết: $lld" -ForegroundColor DarkGray
 Write-Host "RUSTFLAGS    : $co" -ForegroundColor DarkGray
 if ($ChiIn) { exit 0 }
 

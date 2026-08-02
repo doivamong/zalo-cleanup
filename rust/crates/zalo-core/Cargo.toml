@@ -17,5 +17,9 @@ license.workspace = true
 unicode-normalization = "0.1"
 # SHA-256. std không có.
 sha2 = "0.10"
+# settings.json · catalog.json · bản kê sao lưu — phải giữ ĐÚNG định dạng cũ vì
+# dùng chung tệp với bản PowerShell. Cố ý KHÔNG bật tính năng `derive`: nó kéo
+# theo syn, quote và proc-macro2, mà đọc bằng `Value` thì không cần tới.
+serde_json = "1"
 
 [dev-dependencies]

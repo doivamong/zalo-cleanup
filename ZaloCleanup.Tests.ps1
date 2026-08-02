@@ -15,7 +15,23 @@ try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 # trình ngoài, nên chữ có dấu như XÓA sẽ thành X?A trước khi tới công cụ.
 $OutputEncoding = [Text.Encoding]::UTF8
 $runStart = Get-Date
+# $tool giữ nguyên nghĩa cũ: MÃ NGUỒN PowerShell. Hơn một trăm phép thử đem nó
+# ra phân tích bằng AST, và những phép thử đó nói về chính bản PowerShell nên
+# không bao giờ được trỏ đi đâu khác.
 $tool = Join-Path $PSScriptRoot 'ZaloCleanup.ps1'
+
+# $toolChay là CÔNG CỤ ĐƯỢC LÁI. Mặc định cũng là bản PowerShell; đặt biến môi
+# trường ZALO_TOOL trỏ sang zalo-cli.exe thì CÙNG BỘ TEST NÀY lái bản Rust.
+#
+# Đây là cổng của mốc M3: nếu hai bản cùng qua được các phép thử đầu-cuối mà
+# không phải sửa chính các phép thử ấy, thì bộ test trở thành hợp đồng sống cho
+# cả hai bản. Chép bộ test ra làm bản thứ hai chỉ chứng minh được rằng hai bản
+# test khác nhau, chứ không chứng minh được gì về hai công cụ.
+#
+# Tách làm hai biến vì $tool cũ gánh hai vai cùng lúc — thứ bị lái, và mã nguồn
+# bị soi. Trỏ cả hai vai sang một tệp .exe là 135 phép thử AST chết ngay.
+$toolChay = if ($env:ZALO_TOOL) { $env:ZALO_TOOL } else { $tool }
+if (-not (Test-Path -LiteralPath $toolChay)) { throw "Không thấy công cụ để thử: $toolChay" }
 $sbRoot = Join-Path $env:TEMP ('zct_' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $logDir = Join-Path $PSScriptRoot 'logs'
 $script:Pass = 0; $script:Fail = 0; $script:Results = @()
@@ -42,10 +58,19 @@ function Get-ReportedCount($output, $label) {
 
 function Invoke-Tool($root, $keys, $dataRoot) {
     $s = ($keys -join "`r`n") + "`r`n"
-    if ($dataRoot) {
-        return ($s | powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tool -Root $root -DataRoot $dataRoot 2>&1 | Out-String -Width 200)
+    # Bản .ps1 phải chạy qua powershell.exe; bản .exe tự chạy. Chỉ khác chỗ khởi
+    # động — chuỗi phím đưa vào và chuỗi chữ nhận về thì giống hệt nhau, và đó
+    # chính là thứ cổng M3 đem ra so.
+    if ($toolChay -like '*.exe') {
+        if ($dataRoot) {
+            return ($s | & $toolChay -Root $root -DataRoot $dataRoot 2>&1 | Out-String -Width 200)
+        }
+        return ($s | & $toolChay -Root $root 2>&1 | Out-String -Width 200)
     }
-    return ($s | powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tool -Root $root 2>&1 | Out-String -Width 200)
+    if ($dataRoot) {
+        return ($s | powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toolChay -Root $root -DataRoot $dataRoot 2>&1 | Out-String -Width 200)
+    }
+    return ($s | powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toolChay -Root $root 2>&1 | Out-String -Width 200)
 }
 
 function New-Sandbox($name) {
@@ -986,7 +1011,12 @@ param($toolPath, $rootPath)
 '@
 [IO.File]::WriteAllText($runner, $runnerSrc, (New-Object Text.UTF8Encoding $true))
 $keysCul = (@('9', '7', '', 'X', '2', 'XÓA', '', '', '0') -join "`r`n") + "`r`n"
-$oCul = ($keysCul | powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner $tool $rCul 2>&1 | Out-String -Width 200)
+# $toolChay chứ không phải $tool: phép thử này lái công cụ qua một script phụ
+# thay vì qua Invoke-Tool, nên nó là chỗ DUY NHẤT trong toàn bộ các phép thử
+# đầu-cuối phải sửa để điểm hoán đổi có tác dụng. Để nguyên $tool thì khi lái
+# bản Rust nó vẫn lặng lẽ chạy bản PowerShell rồi báo xanh — một phép thử xanh
+# vì chạy nhầm công cụ còn tệ hơn một phép thử đỏ.
+$oCul = ($keysCul | powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner $toolChay $rCul 2>&1 | Out-String -Width 200)
 Assert 'Công cụ chạy đúng dưới vùng miền vi-VN' ((Get-ReportedCount $oCul 'Đã xóa') -eq 3) `
     ("Công cụ báo " + (Get-ReportedCount $oCul 'Đã xóa') + " tệp")
 Assert 'Sandbox rỗng sau khi chạy dưới vi-VN' (@(Get-ChildItem $rCul -Recurse -File -Force -EA SilentlyContinue).Count -eq 0) 'Còn sót tệp'

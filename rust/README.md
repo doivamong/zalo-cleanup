@@ -1,14 +1,17 @@
 # Bản Rust
 
-Đã qua **M0** (khung sườn + cổng kiến trúc), **M1** (lõi an toàn) và **M2** (duyệt cây, băm, bộ lọc quét).
+Đã qua **M0** (khung sườn + cổng kiến trúc), **M1** (lõi an toàn), **M2** (duyệt
+cây, băm, bộ lọc quét) và **M3** (vỏ dòng lệnh).
 
-Ngay sau M2 là **mốc kiểm điểm bắt buộc** của kế hoạch: đã biết lõi port có đúng
-không và có nhanh hơn thật không, mà chưa tiêu công vào giao diện — chỗ rẻ nhất
-để đổi ý. Tiếp theo là **M3**, chế độ headless.
+Tiếp theo là **M4** — xóa, sao lưu, khôi phục. Đây là mốc nguy hiểm nhất của cả
+kế hoạch: port sai ở đó là mất dữ liệu thật, không phải chạy chậm.
 
 Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-hoach-port.md`](../docs/ke-hoach-port.md).
 
-> **Chưa dùng được.** `zalo-cli` và `zalo-gui` mới chỉ là vỏ rỗng. Công cụ thật đang chạy vẫn là bản PowerShell ở thư mục gốc.
+> **Chưa dùng được để dọn dẹp.** `zalo-cli` quét và báo cáo được, nhưng **chưa
+> biết xóa, sao lưu hay khôi phục** — tới những chỗ đó nó đi hết đường hỏi rồi
+> dừng lại và nói thẳng là chưa làm. `zalo-gui` vẫn là vỏ rỗng. Công cụ thật
+> đang chạy vẫn là bản PowerShell ở thư mục gốc.
 
 ---
 
@@ -28,8 +31,8 @@ Dự phóng lúc lập kế hoạch: lõi **36 crate**, cộng `eframe` thành *
 
 | Crate | Là gì | Mốc | Trạng thái |
 |:---|:---|:---|:---|
-| `zalo-core` | Lõi: quyết định xóa gì, và chặn cái gì | M1–M4 | `protect` `confirm` `gate` `contract` `walk` `hash` `scan` **đã có**; `act` `sysinfo` `store` `lock` còn là vỏ rỗng |
-| `zalo-cli` | Vỏ dòng lệnh, nói đúng giao thức phím của bản PowerShell | M3 | vỏ rỗng |
+| `zalo-core` | Lõi: quyết định xóa gì, và chặn cái gì | M1–M4 | `protect` `confirm` `gate` `contract` `walk` `hash` `scan` `sysinfo` `store` `thoigian` **đã có**; `act` và `lock` còn là vỏ rỗng |
+| `zalo-cli` | Vỏ dòng lệnh, nói đúng giao thức phím của bản PowerShell | M3 | **đã có** phần chỉ đọc |
 | `zalo-gui` | Vỏ đồ họa egui, **không chứa quyết định xóa** | M5 | vỏ rỗng |
 
 ## Bộ đối chiếu song song — thứ chứng minh hai bản còn khớp
@@ -57,6 +60,27 @@ Ngoài đối chiếu ở trên, hai cổng còn lại:
 
 **Tốc độ.** `cargo run --release --example do_toc_do -p zalo-core` quét cây thật: **0,507 s** so với ngưỡng 1,5 s, tức nhanh hơn bản PowerShell **10,2 lần**. Cố ý để ở dạng `example` chứ không phải `#[test]` — ghim một ngưỡng giây vào bộ test trên máy chủ CI là mời một phép thử chập chờn, mà phép thử chập chờn thì sớm muộn cũng bị tắt đi, kéo theo cả những phép thử thật nằm cạnh.
 
+## Cổng M3 đã đạt — một bộ test, hai công cụ
+
+`ZaloCleanup.Tests.ps1` giờ lái được **cả hai bản**. Không có bản test thứ hai: chép ra làm hai bản là hai bộ test trôi khỏi nhau, và lúc đó "cả hai đều xanh" chẳng chứng minh được gì về hai công cụ.
+
+Điểm hoán đổi là biến môi trường `ZALO_TOOL`. Bên trong bộ test, `$tool` giữ nguyên nghĩa **mã nguồn PowerShell** — hơn một trăm phép thử đem nó ra soi bằng AST — còn `$toolChay` mới là **thứ bị lái**.
+
+| | |
+|:---|---:|
+| Phép thử đầu-cuối | **67** |
+| Trong phạm vi cổng M3 (không xóa tệp) | **28** |
+| Đạt | **28** |
+| Chờ mốc M4 (có xóa · sao lưu · khôi phục) | 39 |
+
+Bộ chạy [`tools/cong-m3.ps1`](tools/cong-m3.ps1) tự in cả phần **xanh vô nghĩa** — những phép thử đạt chỉ vì bản Rust chưa biết xóa. Giấu chúng đi là tự lừa mình ở đúng chỗ nguy hiểm nhất.
+
+### Đột biến tìm ra hai lỗ mà chính cổng này không bịt được
+
+Cổng đạt ngay lượt đầu, nên phải thử phá. Năm đột biến, **ba trong số đó cổng vẫn xanh**: nhập sai mà âm thầm chọn tất cả, gỡ hẳn chốt vùng bảo vệ khỏi vòng quét, và hạ mức xác nhận của dữ liệu thật. Lý do đều là phép thử đầu-cuối tương ứng chỉ kiểm **câu chữ in ra**, hoặc nằm trong lượt có xóa tệp nên thuộc M4.
+
+Đã bịt bằng ba hàm thuần có phép thử riêng — `phan_tich_chon_thu_muc`, `xet_tep`, `muc_xac_nhan`. Đo lại: cả năm đột biến đều đỏ.
+
 ---
 
 ## Chạy tay
@@ -67,6 +91,12 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\check-deps.ps1
+```
+
+Cổng M3 chạy từ gốc repo, và tự dựng lại exe:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-m3.ps1
 ```
 
 ---

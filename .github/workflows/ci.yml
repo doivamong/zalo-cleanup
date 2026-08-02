@@ -67,7 +67,8 @@ jobs:
   rust:
     name: Rust · lõi và cổng kiến trúc
     runs-on: windows-latest
-    timeout-minutes: 25
+    # Rộng hơn job kia vì cổng M3 chạy nguyên bộ test hai lượt.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: rust
@@ -106,3 +107,17 @@ jobs:
       - name: Cổng kiến trúc M0 — lõi không được dính giao diện
         shell: powershell
         run: .\tools\check-deps.ps1
+
+      # CỔNG M3. Chạy ĐÚNG MỘT bộ test hai lần — một lần lái bản PowerShell, một
+      # lần lái zalo-cli.exe — rồi đối chiếu từng phép thử. Đây là thứ biến bộ
+      # test thành hợp đồng sống cho cả hai bản, thay vì hai bộ test rời nhau
+      # rồi cùng xanh mà chẳng chứng minh được gì về hai công cụ.
+      #
+      # Phạm vi là các phép thử đầu-cuối KHÔNG xóa tệp; phần có xóa thuộc mốc M4
+      # và bộ chạy tự in ra con số ấy chứ không giấu. Xem đầu tệp cong-m3.ps1.
+      #
+      # working-directory: . vì bộ chạy phải đứng ở gốc repo, cạnh ZaloCleanup.ps1.
+      - name: Cổng M3 — cùng một bộ test lái cả hai bản
+        shell: powershell
+        working-directory: .
+        run: .\rust\tools\cong-m3.ps1

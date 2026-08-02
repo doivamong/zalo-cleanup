@@ -46,6 +46,7 @@ pub mod walk;
 pub mod lock;
 pub mod store;
 pub mod sysinfo;
+pub mod thoigian;
 
 // ---------------------------------------------------------------- M4 · động tới dữ liệu
 pub mod act;

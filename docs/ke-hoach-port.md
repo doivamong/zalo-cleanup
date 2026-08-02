@@ -131,7 +131,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M0** Khung sườn + CI | ✅ **đạt** | `7db50ad` · CI xanh cả hai job · cổng kiến trúc đã đột biến hai nhánh, cả hai đỏ đúng |
 | **M1** Lõi an toàn | ✅ **đạt** | `361e250` · đối chiếu **57.572 đầu vào, 0 khác biệt** · 3 đột biến, cả ba đỏ |
 | **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
-| **M3** Chế độ headless | ⬜ chưa | |
+| **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ⬜ chưa | |
 | **M5** Giao diện | ⬜ chưa | |
 | **M6** Phát hành | ⬜ chưa | Chặn bởi `P2-1`, ngân sách ký số |
@@ -192,13 +192,53 @@ Kèm hai phép đối chiếu ngoài cổng: **băm** 70 tệp chạm cả nhán
 
 Dữ liệu Zalo thật có **4.226 tệp `.rescache`**, và công cụ dùng đúng phần mở rộng đó để loại chúng khỏi lượt quét. Dùng thẳng `Path::extension()` là phân loại sai 4.226 tệp — không phải khác biệt lý thuyết. Đã cài đúng luật .NET và đối chiếu 310 tên tệp thật.
 
-## M3 · Chế độ headless — mốc quyết định của cả kế hoạch
+## M3 · Chế độ headless — ✅ đạt · mốc quyết định của cả kế hoạch
 
 `zalo-cli` nhận **đúng giao thức phím qua stdin** như bản PowerShell.
 
 > **Cổng M3:** chạy được **69 phép thử E2E hiện có, KHÔNG SỬA MỘT KÝ TỰ**, chỉ đổi đường dẫn công cụ, và cho cùng kết quả.
 
 Đạt cổng này thì toàn bộ bộ test thành **hợp đồng sống cho cả hai bản**, và bộ so sánh song song có sẵn công cụ. Không đạt thì chiến lược kiểm chứng sụp và phải thiết kế lại trước khi viết thêm dòng nào.
+
+### Cổng này kế hoạch viết sai phạm vi — lần thứ hai
+
+Đếm lại trên mã nguồn: **67** phép thử đầu-cuối, không phải 69. Nhưng sai lớn hơn nằm ở chỗ khác — **39 trong số đó đòi công cụ XÓA, SAO LƯU hoặc KHÔI PHỤC**, tức đúng những việc mà chính kế hoạch xếp vào **M4**. Đòi đủ 67 phép ở M3 là đòi một thứ không thể đạt.
+
+Đây là lỗi cùng loại với lỗi đã bắt ở cổng M1, và xử lý cũng vậy: sửa spec cho đúng phạm vi rồi ghi lại vì sao, chứ không tuyên bố đạt một cổng viết sai.
+
+> **Cổng M3, đã sửa:** chạy các phép thử đầu-cuối **KHÔNG xóa tệp nào** — **28 phép** — bằng đúng tệp `ZaloCleanup.Tests.ps1` ấy, không sửa một ký tự nào trong chính các phép thử, và cho cùng kết quả với bản PowerShell.
+
+Phân loại theo **hành vi thật** chứ không theo phím: lượt khử trùng lặp và lượt dọn cache có xóa tệp dù không hề gõ `XÓA`, còn phím `B` lại chỉ là báo cáo vùng bảo vệ.
+
+**Kết quả:** 28/28 đạt. Bộ chạy là [`rust/tools/cong-m3.ps1`](../rust/tools/cong-m3.ps1), và CI chạy nó sau mỗi commit.
+
+### Điểm hoán đổi: một biến, và một chỗ phải sửa
+
+`$tool` trong bộ test gánh **hai vai** cùng lúc — thứ bị lái, và mã nguồn PowerShell mà hơn một trăm phép thử đem ra soi bằng AST. Trỏ cả hai vai sang một tệp `.exe` là 135 phép thử chết ngay.
+
+Nên tách: `$tool` giữ nguyên nghĩa mã nguồn, `$toolChay` là công cụ được lái và nhận biến môi trường `ZALO_TOOL`. Zero phép thử đầu-cuối phải sửa — **trừ đúng một chỗ**: phép thử vùng miền vi-VN lái công cụ qua một script phụ thay vì qua `Invoke-Tool`, nên phải đổi một định danh ở đó. Để nguyên thì khi lái bản Rust nó vẫn lặng lẽ chạy bản PowerShell rồi báo xanh, và một phép thử xanh vì chạy nhầm công cụ còn tệ hơn một phép thử đỏ.
+
+### Đột biến tìm ra hai lỗ mà cổng không bịt được
+
+Cổng đạt ngay lượt đầu — con số phải nghi ngờ chứ không mừng. Năm đột biến, và **hai trong số đó cổng vẫn xanh**:
+
+| Đột biến | Cổng M3 |
+|:---|:---|
+| Hiện cả mốc thời gian rỗng | đỏ |
+| Khôi phục không mô tả nội dung bản sao lưu | đỏ |
+| Nhập sai thì âm thầm chọn tất cả — phá **nguyên tắc bất biến số 3** | **vẫn xanh** |
+| Gỡ hẳn chốt vùng bảo vệ khỏi vòng quét | **vẫn xanh** |
+| Bản trùng lặp bị đòi gõ `XÓA` như dữ liệu thật | **vẫn xanh** |
+
+Lý do đều giống nhau: phép thử đầu-cuối tương ứng hoặc chỉ kiểm **câu chữ in ra** chứ không kiểm trạng thái, hoặc nằm trong lượt có xóa tệp nên thuộc M4.
+
+Đã bịt bằng cách tách ba quyết định ấy thành hàm thuần rồi kiểm thẳng: `phan_tich_chon_thu_muc`, `xet_tep`, `muc_xac_nhan`. Đo lại: cả năm đột biến đều đỏ.
+
+Đây đúng loại lỗ đã cắn dự án này ở `Test-KeeperAlive` — chốt có mặt trong mã, nhưng không có gì chứng minh nó được **gọi**.
+
+### Một khác biệt cố ý giữa hai bản
+
+`'{0:N2}'` của PowerShell đổi theo vùng miền (`1,234.56` ở en-US, `1.234,56` ở vi-VN); Rust không có khái niệm vùng miền nên luôn in kiểu en-US. Chỉ khác **dấu phân cách**, không khác con số, và không phép quyết định nào đọc lại chuỗi đã định dạng. Ghi ra đây thay vì để đó — một khác biệt không được viết xuống là một khác biệt sẽ bị phát hiện lại vào lúc bất tiện nhất.
 
 ## M4 · Động tới dữ liệu
 

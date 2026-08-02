@@ -16,6 +16,11 @@ rust/target/
 # Cargo.lock thì GIỮ LẠI: đây là ứng dụng phát hành dạng exe dựng sẵn, nên phải
 # build lại được đúng y hệt bộ phụ thuộc của bản đã phát hành.
 
+# Cổng M3 chép zalo-cli.exe ra cạnh ZaloCleanup.ps1, để hai bản cùng đọc một
+# settings.json và cùng ghi vào một logs\ — đúng như khi phát hành. Đó là tệp
+# dựng ra chứ không phải mã nguồn.
+zalo-cli.exe
+
 # Rác của Windows và trình soạn thảo
 Thumbs.db
 desktop.ini

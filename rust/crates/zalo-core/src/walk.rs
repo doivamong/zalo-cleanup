@@ -36,6 +36,11 @@ const REPARSE_POINT: u32 = 0x400;
 pub struct Tep {
     pub duong_dan: PathBuf,
     pub co: u64,
+    /// Lần sửa cuối. Hệ tệp không trả về được thì lấy mốc kỷ nguyên, tức tệp
+    /// **cũ nhất có thể** — hướng an toàn duy nhất là để nó rơi vào mọi mốc tuổi
+    /// rồi hiện ra cho người dùng thấy, chứ không phải lặng lẽ biến mất khỏi mọi
+    /// lượt quét.
+    pub sua_luc: std::time::SystemTime,
 }
 
 /// Kết quả một lượt duyệt.
@@ -101,6 +106,7 @@ pub fn duyet(goc: &Path) -> KetQuaDuyet {
                 ra.tep.push(Tep {
                     duong_dan: e.path(),
                     co: md.len(),
+                    sua_luc: md.modified().unwrap_or(std::time::UNIX_EPOCH),
                 });
             }
         }

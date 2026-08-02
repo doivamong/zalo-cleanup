@@ -133,7 +133,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
-| **M5** Giao diện | ⬜ chưa | |
+| **M5** Giao diện | ◐ **một phần** | Phần máy kiểm được: **đạt** · exe **2,64 MiB** · **39** phép thử giao diện · còn **10 mục mức 1** cần người thật và **3 việc chưa làm** |
 | **M6** Phát hành | ⬜ chưa | Chặn bởi `P2-1`, ngân sách ký số |
 
 ## M0 · Khung sườn — ✅ đạt
@@ -279,11 +279,56 @@ Lượt đột biến đầu để lọt **một** cửa: đổi `remove_dir` th
 
 Bản PowerShell hỏi rồi **tự đóng Zalo** khi lượt dọn chạm vào dữ liệu của nó. Bản Rust **chỉ báo rồi dừng**, để người dùng tự đóng. Hai lý do: giết một ứng dụng nhắn tin đang chạy có thể làm mất tin nhắn chưa gửi, và nhánh ấy không có phép thử nào canh — sandbox của bộ test nằm trong `%TEMP%` nên không bao giờ chạm tới. Viết mã hủy tiến trình mà không có phép thử là đúng thứ dự án này đã thề không làm.
 
-## M5 · Giao diện
+## M5 · Giao diện — ◐ phần máy đạt, phần cần người thật còn nguyên
 
 Theo `ui-ux-council.md`.
 
 > **Cổng M5:** ① danh mục tiếp cận **mức 1** của hội đồng đạt hết ② 36 đường tấn công đã bịt được kiểm lại tay ③ hai chốt xem trước và gõ cụm từ có phép thử tự động.
+
+### Kết quả
+
+| | |
+|:---|---:|
+| Phép thử đơn vị của giao diện | **39** |
+| Tổng phép thử đơn vị (lõi + vỏ) | **127** |
+| Kích thước `zalo-gui.exe` | **2,64 MiB** |
+| Crate riêng cho giao diện | **112** |
+
+Exe **nhỏ hơn** dự phóng 2,86 MiB của hội đồng, dù đã nhúng sẵn phông 756 KB. Cổng kiến trúc M0 vẫn xanh: lõi 17 crate, không dính một dòng giao diện nào.
+
+### Ma sát được dựng lại thành ba mô-đun THUẦN, không nằm trong mã vẽ
+
+An toàn của bản dòng lệnh đến phần lớn từ ma sát. Giao diện đồ họa xóa sạch ma sát đó — mọi thứ cách nhau một cú nhấp. Nên ma sát được dựng lại có chủ đích, và **mỗi mảnh là một mô-đun kiểm được không cần vẽ**: không thể "giữ phím Enter năm giây" trong một hàm `#[test]`, nhưng bơm năm nghìn sự kiện `Enter` vào một máy trạng thái thì được.
+
+| Mô-đun | Canh điều gì |
+|:---|:---|
+| `xac_nhan` | Mười điều của `BP-05`: Enter không kích hoạt, khóa mồi 600 ms tính lại **mỗi lần** nút bật, chặn dán, bỏ phím tự lặp, bấm rồi không nhận thêm |
+| `xem_truoc` | Không mở danh sách tệp sắp mất thì nút xóa **không bật**. Quét lại là chốt đóng lại |
+| `muc_rui_ro` | Ba lớp mã hóa của `MAU-01`: chữ, ký hiệu, rồi mới tới màu. Kèm phép đo tương phản WCAG |
+
+### Ba lỗ thật, tìm ra bằng cách hỏi máy chứ không bằng cách nhìn màn hình
+
+**Phông thiếu glyph `⛨`.** Thiết kế của hội đồng dùng ký hiệu ấy làm huy hiệu vùng bảo vệ. Phông nhúng không có nó, nên nó sẽ hiện thành **ô vuông rỗng** — mà một huy hiệu an toàn hiện thành ô vuông rỗng còn tệ hơn không có huy hiệu nào. Đã thay bằng `⊘`, và gom mọi ký hiệu vào một bảng có phép thử quét toàn bộ, để lỗi loại này không quay lại.
+
+**egui cho phép kích hoạt nút bằng Enter và Space.** `Response::clicked()` trả `true` y như bấm chuột, tức điều 1 và điều 2 của `BP-05` bị lách **ngay ở tầng thư viện** — máy trạng thái không nhìn thấy được. Đã bịt bằng cách nuốt sạch mọi cú bấm của khung nào có Enter hoặc Space.
+
+**Lõi chưa có đường hủy.** `BP-08` đòi Esc dừng được lượt xóa đang chạy và nhật ký ghi "đã hủy giữa chừng". Đã thêm cờ hủy vào `act::xoa`, kèm phép thử: dừng ngay, `hoan_tat = false`, và nhật ký ghi đúng — thiếu vế cuối là người dùng bấm Esc rồi mở nhật ký thấy `hoàn tất=True`.
+
+### Mười mục MỨC 1 CHƯA kiểm — cần người thật ngồi trước màn hình
+
+Bộ chạy [`rust/tools/cong-m5.ps1`](../rust/tools/cong-m5.ps1) **in thẳng tên** mười mục này sau mỗi lần chạy. Một cổng chỉ báo cáo phần nó đo được sẽ đọc ra như "đã đạt hết", và đó là cách một bản phát hành đi ra ngoài với mục mức 1 chưa ai kiểm.
+
+`§8.1-1` giữ Enter/Space/chuột · `§8.1-2` ảnh greyscale 3 người thử · `§8.1-3` gõ `XOÁ` bằng Unikey · `BP-01` chỉ dùng bàn phím · `BP-04` giam tiêu điểm · `DPI-04` màn 1366×768 · `DPI-08` canh giữa cửa sổ cha · `MAU-01` · `MAU-09` · `ĐM-08`.
+
+### Ba việc M5 chưa làm, nói thẳng
+
+| Việc | Hậu quả đo được |
+|:---|:---|
+| **Không có bộ giải mã JPEG XL** | `.jxl` chiếm **46,4%** dữ liệu Zalo thật. Chúng hiện nhãn "ảnh JPEG XL" chứ chưa có ảnh thu nhỏ, nên ma sát xem trước yếu đi đúng phần ấy |
+| **Chưa có màn sao lưu và khôi phục trong giao diện** | Hai việc đó vẫn phải làm bằng bản dòng lệnh hoặc bản PowerShell |
+| **`ĐM-08` chưa cài** | Bật trình đọc màn hình chưa hiện dải thông báo và nút mở bản dòng lệnh. Đây là mục MỨC 1 |
+
+Cả ba đều là việc còn lại của M5, không phải việc của M6.
 
 ## M6 · Phát hành
 

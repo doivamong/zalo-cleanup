@@ -131,3 +131,15 @@ jobs:
         shell: powershell
         working-directory: .
         run: .\rust\tools\cong-lien-thong.ps1 -BoQuaDung
+
+      # CỔNG M5. Danh mục tiếp cận của hội đồng chia ba mức, và mức 1 chặn hẳn
+      # bản phát hành. Bộ chạy làm hai việc: kiểm phần máy kiểm được, và LIỆT KÊ
+      # TÊN phần cần người thật.
+      #
+      # Vế thứ hai quan trọng ngang vế đầu: một cổng chỉ báo cáo phần nó đo được
+      # sẽ đọc ra như "đã đạt hết", và đó là cách một bản phát hành đi ra ngoài
+      # với những mục mức 1 chưa ai kiểm.
+      - name: Cổng M5 — danh mục tiếp cận, phần kiểm được bằng máy
+        shell: powershell
+        working-directory: .
+        run: .\rust\tools\cong-m5.ps1

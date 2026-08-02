@@ -1605,6 +1605,8 @@ impl UngDung {
             dich_sl.as_deref(),
             !du_lieu_that && self.loai_quet != "BẢN TRÙNG LẶP",
             &self.thu_muc_nhat_ky(),
+            None,
+            None,
         ) {
             Ok(r) => r,
             Err(e) => {

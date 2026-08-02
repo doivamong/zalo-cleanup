@@ -130,6 +130,8 @@ pub fn xoa(
     dich_sao_luu: Option<&str>,
     co_the_cat_cut: bool,
     thu_muc_nhat_ky: &Path,
+    huy: Option<&std::sync::atomic::AtomicBool>,
+    tien_do: Option<&dyn Fn(usize, usize)>,
 ) -> std::io::Result<KetQuaXoa> {
     let _ = std::fs::create_dir_all(thu_muc_nhat_ky);
     let nay = luc_nay();
@@ -151,7 +153,20 @@ pub fn xoa(
         ..Default::default()
     };
 
-    for f in danh_sach {
+    for (i, f) in danh_sach.iter().enumerate() {
+        // Dừng giữa chừng phải là dừng SẠCH: thoát vòng lặp, ghi dòng "đã hủy",
+        // và để `hoan_tat` bằng false. Người dùng bấm Esc rồi đọc nhật ký thấy
+        // "hoàn tất=True" là đọc một lời nói dối.
+        if let Some(h) = huy {
+            if h.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+        }
+        if let Some(f) = tien_do {
+            if i % 200 == 0 {
+                f(i, danh_sach.len());
+            }
+        }
         // Cửa 1. Hỏi lại dù lúc quét đã hỏi — xem chú thích đầu mô-đun.
         if vbv.chan(&f.duong_dan) {
             r.vung_bao_ve += 1;
@@ -208,7 +223,13 @@ pub fn xoa(
             }
         }
     }
-    r.hoan_tat = true;
+    r.hoan_tat = match huy {
+        Some(h) => !h.load(std::sync::atomic::Ordering::Relaxed),
+        None => true,
+    };
+    if !r.hoan_tat {
+        writeln!(w, "# Đã hủy giữa chừng lúc {}", luc_nay().dinh_dang())?;
+    }
 
     // `True`/`False` viết hoa chữ đầu: bản PowerShell in giá trị boolean ra như
     // vậy, và bộ test so thẳng chuỗi `hoàn tất=True`.
@@ -715,6 +736,8 @@ mod tests {
             None,
             false,
             &h.0.join("logs"),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(r.da_xoa, 3);
@@ -755,6 +778,8 @@ mod tests {
             None,
             false,
             &h.0.join("logs"),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(r.vung_bao_ve, 1, "tệp trong vùng bảo vệ KHÔNG bị chặn");
@@ -789,6 +814,8 @@ mod tests {
             None,
             false,
             &h.0.join("logs"),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(r.mat_ban_goc, 1);
@@ -818,6 +845,8 @@ mod tests {
             None,
             false,
             &h.0.join("logs"),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(r.mat_ban_goc, 1);
@@ -838,6 +867,8 @@ mod tests {
             None,
             false,
             &h.0.join("logs"),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(r.bien_mat, 1);
@@ -861,6 +892,8 @@ mod tests {
             None,
             false,
             &h.0.join("logs"),
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(r.da_xoa, 1);
@@ -936,6 +969,67 @@ mod tests {
         assert_eq!(r.chep_hong, 1);
         assert!(r.nhat_ky_loi[0].contains("không nằm dưới gốc quét"));
         assert!(Path::new(&la).is_file(), "tệp nguồn bị đụng tới");
+    }
+
+    /// **BP-08, cổng mức 1.** Hủy giữa chừng phải dừng SẠCH và nói thật.
+    ///
+    /// Ba điều phải đúng cùng lúc: dừng ngay, `hoan_tat` bằng `false`, và nhật
+    /// ký ghi rõ đã hủy. Thiếu điều thứ ba là người dùng bấm Esc rồi mở nhật ký
+    /// ra đọc thấy `hoàn tất=True` — một lời nói dối về việc vừa xảy ra với dữ
+    /// liệu của họ.
+    #[test]
+    fn huy_giua_chung_thi_dung_sach_va_noi_that() {
+        let h = Hop::moi("huy");
+        let ds: Vec<TepQuet> = (0..50)
+            .map(|i| TepQuet::moi(h.tep(&format!("video/f{i}"), 10), 10))
+            .collect();
+        // Bật cờ hủy TRƯỚC khi chạy: vòng lặp phải thoát ngay ở tệp đầu tiên.
+        let co = std::sync::atomic::AtomicBool::new(true);
+        let r = xoa(
+            &ds,
+            &vbv_rong(),
+            "DỮ LIỆU ZALO",
+            "x",
+            None,
+            false,
+            &h.0.join("logs"),
+            Some(&co),
+            None,
+        )
+        .unwrap();
+        assert_eq!(r.da_xoa, 0, "đã xóa dù cờ hủy bật sẵn");
+        assert!(!r.hoan_tat);
+        let nk = std::fs::read_to_string(&r.tep_nhat_ky).unwrap();
+        assert!(
+            nk.contains("# Đã hủy giữa chừng lúc"),
+            "nhật ký không ghi đã hủy"
+        );
+        assert!(nk.contains("hoàn tất=False"), "nhật ký vẫn báo hoàn tất");
+        for i in 0..50 {
+            assert!(h.0.join(format!("video/f{i}")).is_file(), "tệp {i} đã mất");
+        }
+    }
+
+    /// Không truyền cờ hủy thì lượt xóa chạy trọn — đường đi bình thường không
+    /// được đổi chỉ vì thêm một tính năng.
+    #[test]
+    fn khong_co_co_huy_thi_chay_tron() {
+        let h = Hop::moi("khonghuy");
+        let ds = vec![TepQuet::moi(h.tep("a", 10), 10)];
+        let r = xoa(
+            &ds,
+            &vbv_rong(),
+            "DỮ LIỆU ZALO",
+            "x",
+            None,
+            false,
+            &h.0.join("logs"),
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(r.hoan_tat);
+        assert_eq!(r.da_xoa, 1);
     }
 
     /// Phép xóa thư mục phải **từ chối** thư mục còn tệp bên trong.

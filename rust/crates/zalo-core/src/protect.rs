@@ -61,6 +61,13 @@ fn hoa_don_gian(s: &str) -> String {
 /// Tách hai loại luật thành hai cấu trúc đúng với bản chất phép so:
 /// `so_bang` cho phép so bằng, `so_tien_to` cho phép so tiền tố. Luật
 /// [`Muc::Goc`] chỉ vào `so_bang` và **không bao giờ** vào `so_tien_to`.
+///
+/// `Clone` để đưa được **nguyên bộ luật** sang luồng nền: việc quét và việc xóa
+/// chạy ngoài luồng giao diện, mà chúng phải hỏi đúng bộ luật ấy. Chép nguyên
+/// bộ chứ không mượn tham chiếu — mượn thì vòng đời buộc luồng nền sống ngắn
+/// hơn giao diện, và cách lách thường gặp là dựng lại bộ luật ở luồng kia, tức
+/// hai bộ luật có thể khác nhau mà không ai hay.
+#[derive(Clone, Debug)]
 pub struct VungBaoVe {
     luat: Vec<Luat>,
     ten_bao_ve: Vec<String>,

@@ -3,14 +3,17 @@
 Đã qua **M0** (khung sườn + cổng kiến trúc), **M1** (lõi an toàn), **M2** (duyệt
 cây, băm, bộ lọc quét), **M3** (vỏ dòng lệnh) và **M4** (xóa · sao lưu · khôi phục).
 
-Tiếp theo là **M5** — giao diện đồ họa.
+**M5** (giao diện đồ họa) đã xong phần kiểm được bằng máy; còn 10 mục mức 1 cần người thật và 3 việc chưa làm — xem kế hoạch.
 
 Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-hoach-port.md`](../docs/ke-hoach-port.md).
 
-> **`zalo-cli` đã dọn dẹp được thật.** Nó quét, sao lưu, xóa và khôi phục — cùng
-> một bộ test lái được cả nó lẫn bản PowerShell và cho cùng kết quả. `zalo-gui`
-> vẫn là vỏ rỗng, nên bản dành cho người dùng thường vẫn là bản PowerShell ở
-> thư mục gốc.
+> **Cả hai vỏ đều dọn dẹp được thật.** `zalo-cli` quét, sao lưu, xóa và khôi
+> phục — cùng một bộ test lái được cả nó lẫn bản PowerShell và cho cùng kết quả.
+> `zalo-gui` quét, xem trước và xóa được.
+>
+> Bản dành cho người dùng thường **vẫn là bản PowerShell** ở thư mục gốc: giao
+> diện còn mười mục mức 1 của danh mục tiếp cận chưa ai kiểm, và chưa có màn sao
+> lưu lẫn khôi phục.
 
 ---
 
@@ -20,7 +23,7 @@ Kế hoạch đầy đủ và bảng trạng thái từng mốc: [`../docs/ke-ho
 
 Dự phóng lúc lập kế hoạch: lõi **36 crate**, cộng `eframe` thành **112**. Nghĩa là 76 crate chỉ để vẽ cửa sổ — và chúng không được dính vào phần quyết định xóa gì.
 
-Đo thật tới hết M2: lõi mới dùng **13 crate**. Và `walkdir` đã bị loại ở M2, nên trần cuối cùng thấp hơn con số 36 kia.
+Đo thật sau M5: lõi **17 crate**, cả cây có giao diện **129** — tức **112 crate chỉ để vẽ cửa sổ**, nhiều hơn dự phóng 76. Exe giao diện **2,64 MiB**, nhỏ hơn dự phóng 2,86 MiB dù đã nhúng sẵn phông 756 KB.
 
 Đây không phải khẩu hiệu. `tools\check-deps.ps1` kiểm nó bằng máy sau mỗi commit, và CI chạy nó.
 
@@ -32,7 +35,7 @@ Dự phóng lúc lập kế hoạch: lõi **36 crate**, cộng `eframe` thành *
 |:---|:---|:---|:---|
 | `zalo-core` | Lõi: quyết định xóa gì, và chặn cái gì | M1–M4 | tất cả **đã có** trừ `lock` |
 | `zalo-cli` | Vỏ dòng lệnh, nói đúng giao thức phím của bản PowerShell | M3–M4 | **đã có** |
-| `zalo-gui` | Vỏ đồ họa egui, **không chứa quyết định xóa** | M5 | vỏ rỗng |
+| `zalo-gui` | Vỏ đồ họa egui, **không chứa quyết định xóa** | M5 | **đã có** phần quét · xem trước · xóa |
 
 ## Bộ đối chiếu song song — thứ chứng minh hai bản còn khớp
 
@@ -92,6 +95,34 @@ Bốn lỗ đều đã bịt bằng hàm thuần có phép thử riêng: `phan_t
 
 ---
 
+## Giao diện đồ họa — ma sát là tính năng, không phải phiền toái
+
+An toàn của bản dòng lệnh đến phần lớn từ **ma sát**: phải quét mới xóa được, phải gõ đủ chữ `XÓA`, phải đi qua nhiều màn hình. Giao diện đồ họa xóa sạch ma sát đó — mọi thứ cách nhau một cú nhấp.
+
+Nên ma sát được dựng lại có chủ đích, và **mỗi mảnh là một mô-đun thuần kiểm được không cần vẽ**:
+
+| Mô-đun | Canh điều gì |
+|:---|:---|
+| `xac_nhan` | Enter không kích hoạt gì · khóa mồi 600 ms tính lại **mỗi lần** nút bật · chặn dán · bỏ phím tự lặp · bấm rồi không nhận thêm |
+| `xem_truoc` | Chưa mở danh sách tệp sắp mất thì nút xóa **không bật**. Quét lại là chốt đóng lại |
+| `muc_rui_ro` | Chữ · ký hiệu · rồi mới tới màu. Bỏ hết màu vẫn phải phân loại đúng |
+
+Không thể "giữ phím Enter năm giây" trong một hàm `#[test]` — nhưng bơm năm nghìn sự kiện `Enter` vào một máy trạng thái thì được.
+
+### Ba lỗ thật, tìm ra bằng cách hỏi máy chứ không bằng cách nhìn màn hình
+
+**Phông thiếu glyph.** Thiết kế dùng `⛨` làm huy hiệu vùng bảo vệ, mà phông nhúng không có nó — nó sẽ hiện thành **ô vuông rỗng**, thứ còn tệ hơn không có huy hiệu nào. Đã thay bằng `⊘` và gom mọi ký hiệu vào một bảng có phép thử quét toàn bộ.
+
+**egui kích hoạt nút bằng Enter và Space.** `Response::clicked()` trả `true` y như bấm chuột, tức luật "Enter không kích hoạt gì" bị lách **ngay ở tầng thư viện** — chỗ máy trạng thái không nhìn thấy được.
+
+**Lõi chưa có đường hủy.** Esc phải dừng được lượt xóa đang chạy *và* nhật ký phải ghi "đã hủy giữa chừng". Thiếu vế cuối là người dùng bấm Esc rồi mở nhật ký thấy `hoàn tất=True`.
+
+### Chưa xong, nói thẳng
+
+Mười mục **mức 1** của danh mục tiếp cận cần người thật ngồi trước màn hình; [`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên chúng sau mỗi lần chạy. Chưa có bộ giải mã JPEG XL (**46,4%** dữ liệu Zalo thật), chưa có màn sao lưu và khôi phục trong giao diện, và `ĐM-08` chưa cài.
+
+---
+
 ## Chạy tay
 
 ```powershell
@@ -107,6 +138,7 @@ Hai cổng đối chiếu chạy từ gốc repo, và tự dựng lại exe:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-song-song.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-lien-thong.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File rust\tools\cong-m5.ps1
 ```
 
 ---

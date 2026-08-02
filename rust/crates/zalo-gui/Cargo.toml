@@ -6,7 +6,24 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-# eframe/egui CHƯA thêm ở M0 — thêm ở M5. Thêm sớm là kéo 76 crate vào mọi lần
-# build CI để đổi lấy con số không.
 [dependencies]
 zalo-core = { path = "../zalo-core" }
+
+# eframe/egui — đã chốt ở QĐ-01 dựa trên số đo thật: exe 2,86 MiB, không cần
+# runtime ngoài, và có AccessKit. Xem docs/ke-hoach-port.md §Q3.
+#
+# `default-features = false` rồi bật lại đúng thứ cần, để bỏ `default_fonts`:
+# phông mặc định của egui KHÔNG có dấu tiếng Việt, mà ta nhúng phông riêng.
+eframe = { version = "0.29", default-features = false, features = [
+    "glow",       # kết xuất OpenGL — có sẵn ở mọi bản Windows, không phải cài gì.
+    "accesskit",  # ĐM-03: mọi widget phải có tên và vai trò cho trình đọc màn hình.
+] }
+
+# Ảnh xem trước. Nhận dạng bằng MAGIC BYTE chứ không bằng phần mở rộng — Zalo
+# lưu 43,7% số tệp KHÔNG có phần mở rộng, mà ngửi thử 400 mẫu thì 88,5% trong
+# số đó là JPEG. Tin phần mở rộng là xem trước được 2,5%; ngửi magic byte là 41%.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+
+# Đã nằm sẵn trong cây phụ thuộc của egui. Khai báo thẳng để phép thử TV-04 hỏi
+# được từng chữ cái tiếng Việt xem phông có glyph không — cổng MỨC 1, chặn merge.
+ab_glyph = "0.2"

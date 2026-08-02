@@ -15,5 +15,7 @@ license.workspace = true
 [dependencies]
 # Chuẩn hóa Unicode để bỏ dấu thanh. std không có. Kéo theo tinyvec, tổng 3 crate.
 unicode-normalization = "0.1"
+# SHA-256. std không có.
+sha2 = "0.10"
 
 [dev-dependencies]

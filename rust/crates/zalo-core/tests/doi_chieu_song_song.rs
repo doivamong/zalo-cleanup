@@ -367,3 +367,209 @@ fn bo_dau_thanh_khop_tung_ly_voi_ban_powershell() {
     );
     eprintln!("đối chiếu bỏ dấu thanh: {} chuỗi, 0 khác biệt", ca.len());
 }
+
+// ==================================================================== CỔNG M2
+
+/// Gọi thần chú với một tham số duy nhất, dùng cho chế độ `walk`.
+fn goi_oracle_mot(che_do: &str, tham_so: &str) -> Vec<String> {
+    goi_oracle(che_do, &[tham_so.to_string()])
+}
+
+/// **Cổng M2 ①** — hai bản duyệt cùng một cây thật, ra cùng tập tệp và cùng số lỗi.
+#[test]
+fn duyet_cay_khop_tung_tep_voi_ban_powershell() {
+    let goc = std::env::var("ZALO_DOI_CHIEU_GOC")
+        .unwrap_or_else(|_| format!("{GOC_DU_LIEU}\\media\\2068096368017928379\\ZaloDownloads"));
+    if !std::path::Path::new(&goc).is_dir() {
+        eprintln!("CHÚ Ý: không có cây thật để đối chiếu duyệt — bỏ qua cổng M2 ①");
+        return;
+    }
+
+    let dong = goi_oracle_mot("walk", &goc);
+    assert!(!dong.is_empty(), "thần chú không trả về gì");
+    let loi_ps: usize = dong[0].trim().parse().expect("dòng đầu phải là số lỗi");
+    let ps: std::collections::BTreeSet<String> =
+        dong[1..].iter().map(|s| s.to_uppercase()).collect();
+
+    let r = zalo_core::walk::duyet(std::path::Path::new(&goc));
+    let rust: std::collections::BTreeSet<String> = r
+        .tep
+        .iter()
+        .map(|t| t.duong_dan.to_string_lossy().to_uppercase())
+        .collect();
+
+    let chi_ps: Vec<&String> = ps.difference(&rust).take(5).collect();
+    let chi_rust: Vec<&String> = rust.difference(&ps).take(5).collect();
+
+    assert!(
+        chi_ps.is_empty() && chi_rust.is_empty(),
+        "Tập tệp lệch. Chỉ PowerShell thấy {}: {:?}. Chỉ Rust thấy {}: {:?}",
+        ps.difference(&rust).count(),
+        chi_ps,
+        rust.difference(&ps).count(),
+        chi_rust
+    );
+    assert_eq!(loi_ps, r.loi, "số lỗi truy cập lệch");
+    eprintln!(
+        "đối chiếu duyệt cây: {} tệp, {} lỗi, 0 khác biệt",
+        ps.len(),
+        loi_ps
+    );
+}
+
+/// **Cổng M2** — băm toàn tệp và chữ ký nhanh phải ra đúng chuỗi bản PowerShell sinh.
+#[test]
+fn bam_khop_tung_chuoi_voi_ban_powershell() {
+    let goc = std::env::var("ZALO_DOI_CHIEU_GOC")
+        .unwrap_or_else(|_| format!("{GOC_DU_LIEU}\\media\\2068096368017928379\\ZaloDownloads"));
+    if !std::path::Path::new(&goc).is_dir() {
+        eprintln!("CHÚ Ý: không có dữ liệu thật để đối chiếu băm — bỏ qua");
+        return;
+    }
+
+    // Lấy mẫu trải đều cả tệp nhỏ lẫn tệp lớn, để chạm cả nhánh FULL: lẫn Q:.
+    let mut tep = zalo_core::walk::duyet(std::path::Path::new(&goc)).tep;
+    tep.sort_by_key(|t| t.co);
+    let mut mau: Vec<String> = Vec::new();
+    let n = tep.len();
+    if n > 0 {
+        for i in 0..60usize {
+            let j = i * n / 60;
+            if j < n {
+                mau.push(tep[j].duong_dan.to_string_lossy().to_string());
+            }
+        }
+        // Thêm hẳn 10 tệp lớn nhất để chắc chắn chạm nhánh Q:.
+        for t in tep.iter().rev().take(10) {
+            mau.push(t.duong_dan.to_string_lossy().to_string());
+        }
+    }
+    mau.sort();
+    mau.dedup();
+    assert!(!mau.is_empty(), "không lấy được mẫu nào");
+
+    let ps_full = goi_oracle("hash", &mau);
+    let ps_quick = goi_oracle("quicksig", &mau);
+    assert_eq!(ps_full.len(), mau.len());
+    assert_eq!(ps_quick.len(), mau.len());
+
+    let mut lech: Vec<String> = Vec::new();
+    let mut so_full = 0usize;
+    let mut so_q = 0usize;
+    for (i, m) in mau.iter().enumerate() {
+        let p = std::path::Path::new(m);
+        match zalo_core::hash::sha256_toan_tep(p) {
+            Ok(h) if h != ps_full[i] => {
+                lech.push(format!("toàn tệp {m}: PS={} Rust={h}", ps_full[i]))
+            }
+            Err(e) if ps_full[i] != "LỖI" => lech.push(format!("toàn tệp {m}: Rust lỗi {e}")),
+            _ => {}
+        }
+        match zalo_core::hash::chu_ky_nhanh(p) {
+            Ok(q) => {
+                if q.starts_with("FULL:") {
+                    so_full += 1;
+                } else {
+                    so_q += 1;
+                }
+                if q != ps_quick[i] {
+                    lech.push(format!("chữ ký nhanh {m}: PS={} Rust={q}", ps_quick[i]));
+                }
+            }
+            Err(e) if ps_quick[i] != "LỖI" => {
+                lech.push(format!("chữ ký nhanh {m}: Rust lỗi {e}"))
+            }
+            _ => {}
+        }
+    }
+
+    assert!(
+        lech.is_empty(),
+        "Lệch {} trên {} tệp:\n  {}",
+        lech.len(),
+        mau.len(),
+        lech.iter()
+            .take(6)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n  ")
+    );
+    assert!(so_q > 0, "mẫu không chạm nhánh Q: — phép thử chưa đủ nghĩa");
+    eprintln!(
+        "đối chiếu băm: {} tệp ({} nhánh FULL:, {} nhánh Q:), 0 khác biệt",
+        mau.len(),
+        so_full,
+        so_q
+    );
+}
+
+/// Phần mở rộng phải hiểu theo luật .NET, không theo luật Rust.
+///
+/// Dữ liệu Zalo thật có hàng nghìn tệp `.rescache`; `Path::extension()` của Rust
+/// trả `None` cho chúng còn .NET trả `".rescache"`. Port ngây thơ là phân loại
+/// sai hàng nghìn tệp.
+#[test]
+fn phan_mo_rong_khop_luat_dotnet() {
+    let mut ca: Vec<String> = vec![
+        ".rescache",
+        ".gitignore",
+        "video.jxl",
+        "a.b.c",
+        "a.",
+        "a",
+        "7594809871497",
+        "",
+        "x.JXL",
+        "CHỮ.HOA",
+        "tên có dấu.jpg",
+        "..",
+        "...",
+        "a..b",
+    ]
+    .into_iter()
+    .map(|s| s.to_string())
+    .collect();
+
+    // Thêm tên tệp thật lấy từ cây Zalo nếu có.
+    let goc = std::env::var("ZALO_DOI_CHIEU_GOC")
+        .unwrap_or_else(|_| format!("{GOC_DU_LIEU}\\media\\2068096368017928379\\ZaloDownloads"));
+    if std::path::Path::new(&goc).is_dir() {
+        let tep = zalo_core::walk::duyet(std::path::Path::new(&goc)).tep;
+        for t in tep.iter().step_by(97).take(300) {
+            if let Some(n) = t.duong_dan.file_name() {
+                ca.push(n.to_string_lossy().to_string());
+            }
+        }
+    }
+    ca.sort();
+    ca.dedup();
+
+    let ps = goi_oracle("ext", &ca);
+    assert_eq!(ps.len(), ca.len());
+
+    let lech: Vec<String> = ca
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            let r = format!("[{}]", zalo_core::scan::duoi_kieu_dotnet(c));
+            if r != ps[i] {
+                Some(format!("{c:?}: PS={} Rust={r}", ps[i]))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    assert!(
+        lech.is_empty(),
+        "Lệch {} trên {} tên tệp:\n  {}",
+        lech.len(),
+        ca.len(),
+        lech.iter()
+            .take(8)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n  ")
+    );
+    eprintln!("đối chiếu phần mở rộng: {} tên tệp, 0 khác biệt", ca.len());
+}

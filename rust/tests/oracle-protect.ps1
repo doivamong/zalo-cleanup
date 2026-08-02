@@ -17,7 +17,7 @@
     -DataRoot đặt thư mục dữ liệu Zalo giả định, để hai bên cùng một điều kiện.
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('rules', 'protect', 'root', 'tones')]
+    [Parameter(Mandatory)][ValidateSet('rules', 'protect', 'root', 'tones', 'walk', 'hash', 'quicksig', 'ext')]
     [string]$Mode,
     [string]$DataRoot = '',
     [string]$ToolDir = ''
@@ -32,7 +32,8 @@ if (-not (Test-Path -LiteralPath $tool)) { throw "không thấy $tool" }
 
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$null, [ref]$null)
 foreach ($fn in @('Get-CanonPath', 'Remove-ToneMarks', 'Test-Protected', 'Test-ProtectedRoot',
-                  'Build-ProtectedIndex', 'Initialize-ProtectedAbs')) {
+                  'Build-ProtectedIndex', 'Initialize-ProtectedAbs',
+                  'Get-FilesSafe', 'Get-Sha256Full', 'Get-QuickSig')) {
     $node = $ast.Find({ param($x)
         $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $x.Name -eq $fn }, $true)
     if ($null -eq $node) { throw "không bóc được hàm $fn" }
@@ -63,6 +64,41 @@ switch ($Mode) {
     'root' {
         while ($null -ne ($line = [Console]::In.ReadLine())) {
             [Console]::Out.WriteLine($(if (Test-ProtectedRoot $line) { '1' } else { '0' }))
+        }
+    }
+    'walk' {
+        # Duyệt một cây và in ra "<số lỗi>" rồi từng đường dẫn tệp, mỗi dòng một.
+        # Dùng CHÍNH Get-FilesSafe của công cụ, không chép lại.
+        $goc = [Console]::In.ReadLine()
+        $script:LastScanErrors = 0
+        $tep = @(Get-FilesSafe $goc)
+        [Console]::Out.WriteLine($script:LastScanErrors)
+        foreach ($f in $tep) { [Console]::Out.WriteLine($f.FullName) }
+    }
+    'hash' {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            while ($null -ne ($line = [Console]::In.ReadLine())) {
+                try { [Console]::Out.WriteLine((Get-Sha256Full $line $sha)) }
+                catch { [Console]::Out.WriteLine('LỖI') }
+            }
+        } finally { $sha.Dispose() }
+    }
+    'quicksig' {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            while ($null -ne ($line = [Console]::In.ReadLine())) {
+                try {
+                    $co = (New-Object IO.FileInfo $line).Length
+                    [Console]::Out.WriteLine((Get-QuickSig $line $co $sha))
+                } catch { [Console]::Out.WriteLine('LỖI') }
+            }
+        } finally { $sha.Dispose() }
+    }
+    'ext' {
+        # Phần mở rộng theo đúng .NET, để đối chiếu với luật đã cài bên Rust.
+        while ($null -ne ($line = [Console]::In.ReadLine())) {
+            [Console]::Out.WriteLine('[' + [IO.Path]::GetExtension($line) + ']')
         }
     }
     'tones' {

@@ -29,8 +29,11 @@
 
 | Cấu hình | Crate |
 |:---|---:|
-| Lõi: `serde_json` `sha2` `walkdir` `csv` `rand` `windows-sys` | **36** |
+| Lõi, dự phóng lúc lập kế hoạch: `serde_json` `sha2` ~~`walkdir`~~ `csv` `rand` `windows-sys` | **36** |
+| Lõi, đo thật sau M2 (`unicode-normalization` + `sha2`) | **13** |
 | Cộng `eframe` (giao diện) | **112** |
+
+Con số **36** là dự phóng, đo bằng cách nạp trước cả danh sách. Thực tế tới hết M2 mới dùng **13**, và `walkdir` đã bị loại nên trần cuối cùng thấp hơn 36. Số chính xác sẽ đo lại ở mốc phát hành — dự phóng không phải phép đo.
 
 → **76 trong 112 crate là do giao diện.** Lõi an toàn có thể soát ở mức 36 crate, và phần kéo theo nhiều nhất lại là phần không đụng tới một byte dữ liệu nào của người dùng. Đây là lý lẽ kiến trúc mạnh nhất của cả kế hoạch.
 
@@ -85,9 +88,9 @@ zalo-gui/                        bin egui — vỏ, không chứa quyết địn
 | `csv` | Xuất CSV | Định dạng có ngoặc kép và escape, tự viết là mời lỗi |
 | `rand` | Lấy mẫu 50 tệp khi xác minh | Std không có |
 | `windows-sys` | Win32 | Std không phơi ra |
-| `walkdir` | **Ứng viên, chưa chốt** — xem ghi chú | |
+| ~~`walkdir`~~ | **ĐÃ LOẠI ở M2** — xem ghi chú | |
 
-> **`walkdir` phải kiểm chứng trước khi dùng.** Ràng buộc `R-09` đòi **không đi xuyên reparse point**. `walkdir` mặc định không theo symlink, nhưng junction NTFS không phải symlink. Mốc M2 phải dựng junction thật rồi đo — giống hệt cách phiên trước đã kiểm bộ duyệt PowerShell. Không đạt thì tự viết bằng `windows-sys`, tốn thêm chừng 60 dòng.
+> **`walkdir` đã bị loại ở mốc M2.** Đo trên junction thật: nó **không** đi xuyên, nhưng bản tự duyệt bằng `std::fs` cũng vậy và không tốn thêm crate nào. Chốt reparse point cài tường minh theo cờ `FILE_ATTRIBUTE_REPARSE_POINT`, có phép thử riêng cho cả chốt lẫn hành vi duyệt.
 
 ## Giao diện — thêm 76 crate
 
@@ -127,7 +130,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 |:---|:---|:---|
 | **M0** Khung sườn + CI | ✅ **đạt** | `7db50ad` · CI xanh cả hai job · cổng kiến trúc đã đột biến hai nhánh, cả hai đỏ đúng |
 | **M1** Lõi an toàn | ✅ **đạt** | `361e250` · đối chiếu **57.572 đầu vào, 0 khác biệt** · 3 đột biến, cả ba đỏ |
-| **M2** Duyệt cây và băm | ⬜ chưa | **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
+| **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
 | **M3** Chế độ headless | ⬜ chưa | |
 | **M4** Động tới dữ liệu | ⬜ chưa | |
 | **M5** Giao diện | ⬜ chưa | |
@@ -158,13 +161,36 @@ Hai con số không bằng nhau và **không cần bằng nhau**: phép thử Ru
 
 Chọn mốc này làm mốc đầu vì nó nhỏ, rủi ro cao nhất, và **đã có sẵn bộ so sánh chứng minh được cách làm này hiệu quả**.
 
-## M2 · Duyệt cây và băm
+## M2 · Duyệt cây và băm — ✅ đạt
 
 `walk/` `hash/` `scan/`.
 
 > **Cổng M2:** ① quét cùng một cây thật, hai bản ra **cùng tập tệp và cùng số lỗi** ② dựng junction thật, hai bản **đều không đi xuyên** ③ quét 52.748 tệp **≤ 1,5 giây** (bản PowerShell: 5,2 giây).
 
 Cổng ③ là chỗ kiểm chứng lợi ích hiệu năng. Không đạt thì lợi ích chính không có và phải xem lại.
+
+**Kết quả đo:**
+
+| Cổng | Yêu cầu | Đo được |
+|:---|:---|:---|
+| ① cùng tập tệp, cùng số lỗi | 0 khác biệt | **57.351 tệp · 0 lỗi · 0 khác biệt** |
+| ② junction | không đi xuyên | **không đi xuyên**, có phép thử riêng cho cả chốt lẫn hành vi |
+| ③ tốc độ | ≤ 1,5 s | **0,507 s** — nhanh hơn bản PowerShell **10,2 lần** |
+
+Kèm hai phép đối chiếu ngoài cổng: **băm** 70 tệp chạm cả nhánh `FULL:` lẫn `Q:`, 0 khác biệt; **phần mở rộng** 310 tên tệp, 0 khác biệt.
+
+### Hai chỗ số đo lật lại quyết định của kế hoạch
+
+**Loại `walkdir`.** Kế hoạch để nó ở diện *ứng viên chưa chốt*, chờ đúng một phép đo. Đã đo trên junction thật: `walkdir` **không** đi xuyên — nhưng bản tự duyệt cũng vậy, mà **không tốn thêm crate nào**. Nên tự viết, và `walkdir` bị loại khỏi danh sách phụ thuộc ở Q2.
+
+**Phần mở rộng phải theo luật .NET, không theo luật Rust.** Đây là bẫy kế hoạch không lường:
+
+| Tên tệp | .NET `Path.GetExtension` | Rust `Path::extension` |
+|:---|:---|:---|
+| `.rescache` | `".rescache"` | `None` |
+| `a.` | `""` | `Some("")` |
+
+Dữ liệu Zalo thật có **4.226 tệp `.rescache`**, và công cụ dùng đúng phần mở rộng đó để loại chúng khỏi lượt quét. Dùng thẳng `Path::extension()` là phân loại sai 4.226 tệp — không phải khác biệt lý thuyết. Đã cài đúng luật .NET và đối chiếu 310 tên tệp thật.
 
 ## M3 · Chế độ headless — mốc quyết định của cả kế hoạch
 

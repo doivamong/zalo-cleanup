@@ -44,14 +44,30 @@ $cargoHome = $cargoHome.TrimEnd('\')
 
 # Thứ tự cờ không quan trọng, nhưng NỘI DUNG thì có: hai máy phải sinh ra cùng
 # một chuỗi cờ sau khi thay thế, nếu không đầu ra vẫn khác nhau.
+# ③ TRÌNH LIÊN KẾT KHÁC BẢN.
+#    Đo: hai lượt CI liên tiếp trên cùng mã nguồn ra hai tệp khác nhau, vì ảnh
+#    máy chủ đổi giữa hai lượt — Visual Studio 18.8.12023.21 rồi 18.7.11925.98.
+#    Tức CI còn không tái lập được với chính nó.
+#
+#    `link.exe` của MSVC không ghim được từ repo. `rust-lld` thì có: nó đi kèm
+#    đúng bộ toolchain mà `rust-toolchain.toml` đã ghim, nên ghim rustc là ghim
+#    luôn trình liên kết.
+$sysroot = (& rustc --print sysroot).Trim()
+$lld = Join-Path $sysroot 'lib\rustlib\x86_64-pc-windows-msvc\bin\rust-lld.exe'
+if (-not (Test-Path $lld)) { throw "Không thấy rust-lld ở $lld" }
+
 $co = @(
     '-Clink-arg=/Brepro'
+    '-Clinker-flavor=lld-link'
+    "-Clinker=$lld"
     "--remap-path-prefix=$goc=/z"
     "--remap-path-prefix=$cargoHome=/c"
 ) -join ' '
 
 Write-Host "Gốc mã nguồn : $goc" -ForegroundColor DarkGray
 Write-Host "CARGO_HOME   : $cargoHome" -ForegroundColor DarkGray
+Write-Host "rustc        : $((& rustc --version).Trim())" -ForegroundColor DarkGray
+Write-Host "Trình liên kết: rust-lld đi kèm toolchain" -ForegroundColor DarkGray
 Write-Host "RUSTFLAGS    : $co" -ForegroundColor DarkGray
 if ($ChiIn) { exit 0 }
 

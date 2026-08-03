@@ -515,17 +515,27 @@ if (Lam 'BP-01') {
         if ($cu.Length -gt 0) { Phim $VK.END; Phim $VK.BS $cu.Length 40 }
         GoChu $dich
         Start-Sleep -Milliseconds 500
-        $b['gõ được đường dẫn'] = (CoChu (Cay) "*$([IO.Path]::GetFileName($dich))*")
+        # Đọc bằng `ValuePattern`, KHÔNG bằng `Name`. Nội dung ô nhập nằm ở
+        # Value; Name của nó rỗng. Bản đầu tìm tên tệp trong Name của cả cây
+        # nên báo "chưa gõ được" trong khi tay vẫn sao lưu xong 31 tệp vào
+        # đúng thư mục ấy — hai kết quả chọi nhau, và cái sai là phép đo.
+        $trong_o = Doc-O-Nhap
+        Ghi "ô nhập sau khi gõ: '$trong_o'"
+        $b['gõ được đường dẫn'] = ($trong_o -eq $dich)
         $b['bắt đầu sao lưu']   = Toi-Nut '*Bắt đầu sao lưu*'
         if ($b['bắt đầu sao lưu']) { Bam-Bang-Space; Start-Sleep -Seconds 5 }
         $b['sao lưu xong'] = ((Dem-Tep $dich) -ge $truoc)
         Ghi ("sao lưu: {0} tệp ở {1}" -f (Dem-Tep $dich), $dich)
 
-        # Về lại kết quả quét
-        for ($i = 0; $i -lt 8; $i++) {
+        # Về lại kết quả quét.
+        #
+        # `Về trang chủ` là ngõ cụt: trang chủ không có đường nào tới kết quả
+        # quét. Chỉ đi bằng `← Quay lại kết quả quét`, và nếu không thấy nút ấy
+        # thì đây là hỏng thật chứ không phải đi nhầm đường.
+        for ($i = 0; $i -lt 4; $i++) {
             if (CoChu (Cay) '*Xóa vĩnh viễn…*') { break }
-            if (Toi-Nut '*Về trang chủ*' 6) { Bam-Bang-Space; Start-Sleep -Seconds 1 }
-            elseif (Toi-Nut '*Quay lại*' 6) { Bam-Bang-Space; Start-Sleep -Seconds 1 }
+            if (Toi-Nut '*Quay lại kết quả quét*' 8) { Bam-Bang-Space; Start-Sleep -Seconds 1 }
+            elseif (Toi-Nut '*Quay lại*' 8) { Bam-Bang-Space; Start-Sleep -Seconds 1 }
             else { break }
         }
         $b['về được màn kết quả quét'] = (CoChu (Cay) '*Xóa vĩnh viễn…*')
@@ -568,9 +578,19 @@ if (Lam 'BP-01') {
             ($hong.Count -eq 0) ("chặng hỏng: " + ($hong -join ', '))
 
         # Đây là chỗ hai mục mức 1 đâm vào nhau, và mã đã chọn phía nào.
-        Assert 'BP-01b' 'Bấm được LỆNH XÓA bằng bàn phím' $b['bấm được nút xóa bằng bàn phím'] `
-            ('BP-05 điều 1/2/6 nuốt Enter và Space trên trang xác nhận, nên không có ' +
-             'đường nào từ bàn phím tới lệnh xóa. Xem phần kết luận.')
+        #
+        # Chỉ kết luận khi ĐÃ thật sự đứng trên trang xác nhận với nút đã bật.
+        # Không có vế ấy thì "không bấm được" chỉ nghĩa là chưa đi tới nơi, mà
+        # báo cáo lại đọc như thể đã chứng minh được điều gì.
+        if ($b['ra trang xác nhận'] -and $b['nút xóa bật lên sau khi gõ']) {
+            Assert 'BP-01b' 'Bấm được LỆNH XÓA bằng bàn phím' $b['bấm được nút xóa bằng bàn phím'] `
+                ('Đã đứng đúng trên trang xác nhận, nút đã BẬT, gõ cả Space lẫn Enter mà ' +
+                 '0 tệp mất. BP-05 điều 1/2/6 nuốt sạch Enter và Space ở đây, nên KHÔNG CÓ ' +
+                 'đường nào từ bàn phím tới lệnh xóa. Hai mục mức 1 đâm nhau — xem kết luận.')
+        } else {
+            Assert 'BP-01b' 'Đi tới được trang xác nhận với nút đã bật, để mà đo' $false `
+                'chưa tới nơi, nên chưa kết luận được gì về đường bàn phím tới lệnh xóa'
+        }
         Remove-Item $dich -Recurse -Force -EA SilentlyContinue
     } catch {
         Assert $script:MucDangChay 'chạy trọn phần này, không đứt giữa chừng' $false $_.Exception.Message

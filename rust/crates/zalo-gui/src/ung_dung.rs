@@ -852,6 +852,27 @@ impl UngDung {
             ui.label(d);
         }
         ui.add_space(12.0);
+
+        // ĐƯỜNG VỀ KẾT QUẢ QUÉT. Thiếu nó là một ngõ cụt, và là ngõ cụt đúng ở
+        // chỗ nguy hiểm nhất.
+        //
+        // Sao lưu xong thì màn này hiện ra, và nó nói thẳng "Sao lưu sạch. Đã
+        // mở khóa bước xóa." Nhưng nút duy nhất ở đây từng là "Về trang chủ",
+        // mà trang chủ **không có đường nào quay lại kết quả quét** — nó chỉ
+        // đặt được từ lúc quét xong. Người dùng làm đúng thứ giao diện khuyên
+        // họ làm, rồi mất luôn lượt quét vừa làm.
+        //
+        // Nặng hơn phần phiền toái: `sao_luu_gan_nhat` khóa theo `dau_quet`,
+        // nên quét lại là bản sao lưu vừa tạo cũng hết hiệu lực và phải sao lưu
+        // lần nữa. Một câu "đã mở khóa bước xóa" dẫn tới chỗ không có bước xóa
+        // thì tệ hơn là không nói gì.
+        //
+        // Tìm ra khi chạy `BP-01` — kịch bản bàn phím đi tới đây rồi tắc.
+        if self.quet.is_some() && ui.button("← Quay lại kết quả quét").clicked() {
+            self.ket_qua.clear();
+            self.loi = None;
+            self.man = ManHinh::KetQuaQuet;
+        }
         if ui.button("Về trang chủ").clicked() {
             self.ket_qua.clear();
             self.loi = None;

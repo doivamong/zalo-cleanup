@@ -389,9 +389,21 @@ Unikey không "gõ tiếng Việt"; ở bước cuối nó đẩy vào ứng d�
 | tổ hợp NFD | `X` `O` `A` `U+0301` | **bật** |
 | chữ thường, kiểu mới | `x` `o` `a` `⌫` `á` | **tắt** ✓ đúng `TV-01` |
 
+#### Lỗi ③ — sao lưu xong là mất luôn lượt quét
+
+Tìm ra ở lượt chạy `BP-01` đầu tiên, khi kịch bản bàn phím đi tới đây rồi **tắc**.
+
+Sao lưu xong thì màn `Kết quả` hiện ra, và nó nói thẳng: *"Sao lưu sạch. **Đã mở khóa bước xóa.**"* Nhưng nút duy nhất trên màn ấy là `Về trang chủ` — mà trang chủ **không có đường nào quay lại kết quả quét**. `ManHinh::KetQuaQuet` chỉ đặt được từ lúc quét xong, từ `XemDanhSach`, từ `SaoLuu`, hoặc từ nút Hủy của trang xác nhận. Không có đường nào từ `KetQua`.
+
+Nghĩa là: người dùng làm **đúng thứ giao diện khuyên họ làm** — sao lưu trước khi xóa — rồi mất luôn lượt quét vừa làm.
+
+Nặng hơn phần phiền toái: `sao_luu_gan_nhat` khóa theo `dau_quet`, nên quét lại là bản sao lưu vừa tạo **cũng hết hiệu lực** và phải sao lưu lần nữa. Một câu *"đã mở khóa bước xóa"* dẫn tới chỗ không có bước xóa thì tệ hơn là không nói gì.
+
+Đã sửa: màn `Kết quả` mọc thêm nút `← Quay lại kết quả quét`, và chỉ hiện khi lượt quét còn trong bộ nhớ.
+
 #### `BP-01` — chạy được tới đâu, và vì sao dừng
 
-Phần đo được đã đo: vòng Tab của **mọi** màn hình giờ liền mạch sau khi vá `nut_co_the_tat`. Nhưng kịch bản đầy đủ mà hội đồng đòi — *chọn nguồn → quét → xem → sao lưu → xóa → xem nhật ký*, rút chuột ra — **chưa chạy trọn được lần nào**, vì lý do nằm ngoài công cụ.
+Phần đo được đã đo: vòng Tab của **mọi** màn hình giờ liền mạch sau khi vá `nut_co_the_tat`, và lượt chạy đầu tiên đi được **9 trong 14 chặng** trước khi tắc ở ngõ cụt trên — kể cả chặng gõ đường dẫn vào ô nhập rồi **sao lưu thật 31 tệp**. Nhưng kịch bản đầy đủ mà hội đồng đòi — *chọn nguồn → quét → xem → sao lưu → xóa → xem nhật ký*, rút chuột ra — **chưa chạy trọn được lần nào**, vì lý do nằm ngoài công cụ.
 
 Nó phải chiếm bàn phím của **cả máy** trong vài phút. Máy đang có người dùng, và một lượt chạy đã bị Chrome giành mất tiền cảnh **giữa** lúc kiểm và lúc gửi phím. Phần sao lưu gõ đường dẫn vào ô nhập — phím lạc sang một bảng tính đang mở là hỏng dữ liệu thật của người khác.
 

@@ -56,8 +56,8 @@ function Assert($ma, $ten, $ok, $chi_tiet) {
 # Cả hai đã sửa. Bài học cũ, lần thứ tám: **đoán thì không bắt được gì.**
 # ---------------------------------------------------------------------------
 $canNguoiThat = @(
-    @{ Ma = 'BP-01';  Viec = 'Chạy TRỌN kịch bản chỉ bằng bàn phím, từ chọn nguồn tới xem nhật ký'
-       ChuY = 'Bộ chạy đã có, nhưng nó chiếm bàn phím của cả máy vài phút. Cần một cửa sổ máy YÊN TĨNH — phím lạc sang cửa sổ khác là hỏng việc thật. Vòng Tab của mọi màn đã đo và đã sửa xong.' }
+    @{ Ma = 'BP-01';  Viec = 'QUYẾT ĐỊNH: có mở đường bàn phím tới lệnh xóa không'
+       ChuY = 'Đã đo trọn: 14/14 chặng TỚI TRƯỚC lệnh xóa đạt. Chặng cuối KHÔNG — BP-05 điều 1 nuốt Enter và Space, nên bàn phím không xóa được. Hai mục mức 1 đâm nhau; xem Q14 trong docs/quyet-dinh.md. Đây là quyết định của chủ dự án, không phải việc còn nợ của mã.' }
     @{ Ma = '§8.1-2'; Viec = 'Ba người thử nhìn ảnh greyscale và xếp đúng mức rủi ro → 33/33'
        ChuY = 'Ảnh đã sinh sẵn bằng kiem-muc-1.ps1. Chỉ còn phần MẮT NGƯỜI.' }
     @{ Ma = 'MAU-01'; Viec = 'Cùng bộ ảnh trên, phần người đọc'

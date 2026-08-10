@@ -375,7 +375,7 @@ Dính **ba màn**, và chỗ nặng nhất không phải màn sao lưu mà là *
 | **`MAU-01`** | ✅ 4/4 phần máy. Ký hiệu ↔ câu chữ khớp một-một; trên **ảnh đã bỏ màu**, mỗi mức vẽ ra một hình riêng, và hai dòng cùng mức vẽ ra cùng một hình |
 | **`MAU-09`** | ✅ 4/4 phần máy. Khác chữ, khác biểu tượng, cách nhau **48 dip**, `Hủy` đứng trước theo thứ tự đọc |
 | **`ĐM-08`** | ✅ 5/5 phần máy. Dải hiện ra, nói đúng câu, nút bật, **dải vẫn hiện khi đã đi sâu vào giữa luồng**, và bấm thì `zalo-cli.exe` chạy lên thật |
-| **`BP-01`** | ◐ lỗi đã sửa, nhưng **chưa chạy trọn được kịch bản** |
+| **`BP-01`** | ◐ **14/14 chặng tới trước lệnh xóa đạt.** Chặng cuối không — `BP-05` chặn đường bàn phím tới lệnh xóa. Hai mục mức 1 đâm nhau → `Q14`, chờ chủ dự án |
 
 ##### Bốn kiểu gõ của §8.1-3, vì nó là mục dễ tưởng đã kiểm nhất
 
@@ -401,19 +401,46 @@ Nặng hơn phần phiền toái: `sao_luu_gan_nhat` khóa theo `dau_quet`, nên
 
 Đã sửa: màn `Kết quả` mọc thêm nút `← Quay lại kết quả quét`, và chỉ hiện khi lượt quét còn trong bộ nhớ.
 
-#### `BP-01` — chạy được tới đâu, và vì sao dừng
+#### `BP-01` — đã chạy trọn, và kết quả là hai mục mức 1 đâm nhau
 
-Phần đo được đã đo: vòng Tab của **mọi** màn hình giờ liền mạch sau khi vá `nut_co_the_tat`, và lượt chạy đầu tiên đi được **9 trong 14 chặng** trước khi tắc ở ngõ cụt trên — kể cả chặng gõ đường dẫn vào ô nhập rồi **sao lưu thật 31 tệp**. Nhưng kịch bản đầy đủ mà hội đồng đòi — *chọn nguồn → quét → xem → sao lưu → xóa → xem nhật ký*, rút chuột ra — **chưa chạy trọn được lần nào**, vì lý do nằm ngoài công cụ.
+Chạy trên máy đã đóng hết ứng dụng khác, rút chuột ra hoàn toàn — bộ chạy **không có một hàm nào** gọi tới chuột, và sự thiếu vắng ấy là một phần của phép thử.
 
-Nó phải chiếm bàn phím của **cả máy** trong vài phút. Máy đang có người dùng, và một lượt chạy đã bị Chrome giành mất tiền cảnh **giữa** lúc kiểm và lúc gửi phím. Phần sao lưu gõ đường dẫn vào ô nhập — phím lạc sang một bảng tính đang mở là hỏng dữ liệu thật của người khác.
+**14/14 chặng tới trước lệnh xóa: ĐẠT.**
 
-Đã siết ba lớp trong bộ chạy, nhưng không lớp nào xóa được rủi ro ấy:
+| Chặng | |
+|:---|:---|
+| chọn nguồn → `Lấy lại dung lượng ổ đĩa` | ✓ |
+| quét → `Kết quả quét · DỮ LIỆU ZALO` | ✓ |
+| xem danh sách → `Những tệp sắp mất` | ✓ |
+| Esc quay về kết quả quét (`BP-06`) | ✓ |
+| vào màn sao lưu, Tab tới ô nhập | ✓ |
+| **gõ đường dẫn bằng bàn phím**, đọc lại đúng từng ký tự | ✓ |
+| **sao lưu thật 31 tệp** | ✓ |
+| quay lại kết quả quét | ✓ *(chặng này chỉ đi được sau khi vá lỗi ③)* |
+| mở trang xác nhận, gõ `XÓA`, nút xóa **bật lên** | ✓ |
 
-- kiểm tiền cảnh **cả trước lẫn sau** mỗi lô phím, lệch là dừng ngay
-- bỏ hẳn `Ctrl+A`; hỏi UIA xem ô nhập đang có bao nhiêu ký tự rồi xóa đúng bấy nhiêu
-- ba phần **không** phải phép thử bàn phím (`MAU-01`, `MAU-09`, `ĐM-08`) chuyển sang đi bằng `InvokePattern` của UIA, không gõ phím toàn cục, chạy lúc nào cũng được
+**Chặng cuối: KHÔNG.** Đứng đúng trên trang xác nhận, nút đã BẬT, gõ cả `Space` lẫn `Enter` — **0 tệp mất**.
 
-Còn lại là **một cửa sổ máy yên tĩnh**, không phải một dòng mã.
+Đây không phải lỗi. Đây là **`BP-05` đang làm đúng việc của nó**, và hai mục mức 1 đâm thẳng vào nhau:
+
+| | |
+|:---|:---|
+| `BP-01` | *"Mọi hành động làm được bằng bàn phím"* |
+| `BP-05` điều 1 | *"Không có nút mặc định. Enter không kích hoạt gì, **bất kể tiêu điểm ở đâu**."* |
+
+Mã đã chọn phía `BP-05`: `ve_xac_nhan_xoa` **nuốt sạch** mọi cú bấm của khung nào có `Enter` hoặc `Space`, vì `Response::clicked()` của egui trả `true` cho cả hai y như bấm chuột. Hệ quả: **không có đường nào từ bàn phím tới lệnh xóa**, kể cả một lần nhấn hoàn toàn có chủ ý.
+
+Đọc kỹ mười điều thì có chỗ hở đáng cân nhắc:
+
+- Điều 1 cấm `Enter` **dứt khoát** — không bàn lại.
+- Điều 8 cấm **phím tắt** trỏ vào nút xóa — nhưng "Tab tới nút rồi bấm Space" không phải phím tắt.
+- Điều 6 lại nói ngược: *"Chỉ chấp nhận một lần nhấn **trọn vẹn** (key-down **và** key-up cùng xảy ra khi trang đang mở). Phím giữ từ màn trước không tính."* Câu ấy **giả định là có** một lần nhấn được chấp nhận, và chỉ loại phím tự lặp với phím giữ từ màn trước.
+
+Tức mười điều **cho phép** một đường: `Space` trên nút đang có tiêu điểm, nhận đúng một lần nhấn trọn vẹn bắt đầu trên chính trang này, sau khi hết khóa mồi. Làm được thì `BP-01` đạt mà `BP-05` không bị nới.
+
+Nhưng đó là sửa **chỗ nguy hiểm nhất của cả công cụ**, và làm hụt là mở lại đúng cái lỗ mà `§8.1-1` sinh ra để canh. Nên nó là **quyết định của chủ dự án**, không phải việc tôi tự đổi. Xem `Q14` trong [`quyet-dinh.md`](quyet-dinh.md).
+
+Cho tới khi có quyết định, trạng thái đúng là: **người dùng chỉ có bàn phím thì dùng `zalo-cli.exe`** — và hội đồng đã ghi sẵn điều đó ở `ĐM-08`: *"Bản dòng lệnh là đường tiếp cận chính thức cho người khiếm thị, không phải tác dụng phụ tình cờ."*
 
 #### Một chuyện chưa truy tới cùng, ghi lại chứ không lấp
 
@@ -468,7 +495,7 @@ Bảng ở đây từng liệt kê ba việc — JPEG XL, màn sao lưu/khôi ph
 
 | Việc | Cần gì | Vì sao máy không làm thay được |
 |:---|:---|:---|
-| **`BP-01`** chạy trọn kịch bản bằng bàn phím | một cửa sổ **máy yên tĩnh** vài phút | Bộ chạy phải chiếm bàn phím của cả máy; phím lạc sang cửa sổ khác là hỏng việc thật của người dùng |
+| **`BP-01`** — có mở đường bàn phím tới lệnh xóa không | **một quyết định**, `Q14` | Đo xong: 14/14 chặng trước lệnh xóa đạt, chặng cuối bị `BP-05` chặn. Sửa là đụng vào chỗ nguy hiểm nhất của công cụ, nên không phải việc người viết mã tự quyết |
 | **`§8.1-2` · `MAU-01` · `MAU-09`** | **ba người thử** nhìn bộ ảnh greyscale đã sinh sẵn | Máy đo được ký hiệu, câu chữ, hình sau khi bỏ màu, vị trí và khoảng cách. Nó **không** đo được người ta có *hiểu* không |
 | **`ĐM-08`** với NVDA thật | cài NVDA | Máy này chưa cài. Đã đo trọn đường dò và đường lui bằng cờ `SPI_SETSCREENREADER`, nhưng đó là cờ chứ không phải NVDA |
 | Truy nốt vụ **ứng dụng tự thoát** | thêm số đo | Mẫu 5 lượt quá nhỏ. Xem mục ngay trên |

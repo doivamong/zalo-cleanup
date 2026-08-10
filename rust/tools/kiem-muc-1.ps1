@@ -276,17 +276,36 @@ function TenTieuDiem { $t = TieuDiem; return $t.Ten }
 # Nội dung ô nhập, đọc qua `ValuePattern` — để biết có gì cần xóa trước khi gõ,
 # thay vì bổ một nhát `Ctrl+A` vào bất cứ cửa sổ nào đang nhận phím.
 function Doc-O-Nhap {
+    # Thử ba đường và NÓI RA đường nào ăn. Không phải mọi nhà cung cấp UIA đều
+    # phơi `ValuePattern`; im lặng trả chuỗi rỗng khi đọc hỏng là cách phép thử
+    # báo "chưa gõ được" trong khi tay vẫn gõ xong — đã dính đúng bẫy ấy một lần.
+    $e = $null
     try {
         $r = [System.Windows.Automation.AutomationElement]::FromHandle($script:H)
         $e = $r.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
             (New-Object System.Windows.Automation.PropertyCondition(
                 [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
                 [System.Windows.Automation.ControlType]::Edit)))
-        if ($null -eq $e) { return '' }
+    } catch { }
+    if ($null -eq $e) { $script:CachDoc = 'không thấy ô nhập'; return '' }
+    try {
         $vp = $e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+        $script:CachDoc = 'ValuePattern'
         return [string]$vp.Current.Value
-    } catch { return '' }
+    } catch { }
+    try {
+        $v = $e.GetCurrentPropertyValue([System.Windows.Automation.ValuePattern]::ValueProperty)
+        if ($null -ne $v) { $script:CachDoc = 'ValueProperty'; return [string]$v }
+    } catch { }
+    try {
+        $t = $e.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)
+        $script:CachDoc = 'TextPattern'
+        return [string]$t.DocumentRange.GetText(-1)
+    } catch { }
+    $script:CachDoc = 'không đọc được bằng đường nào'
+    return ''
 }
+$script:CachDoc = '?'
 function Tim($cay, $mau) { return ($cay | Where-Object { $_.Ten -like $mau } | Select-Object -First 1) }
 function CoChu($cay, $mau) { return [bool](Tim $cay $mau) }
 
@@ -481,24 +500,31 @@ if (Lam 'BP-01') {
         $p = Mo-App $sb
         $b = @{}   # từng chặng đi được hay không
 
-        $b['chọn nguồn']  = Toi-Nut '*Lấy lại dung lượng*'
-        if ($b['chọn nguồn']) { Bam-Bang-Space }
-        $b['quét']        = Toi-Nut '*Quét dữ liệu cũ hơn 12 tháng*'
-        if ($b['quét']) { Bam-Bang-Space; Start-Sleep -Seconds 4 }
+        # Đi lại IM LẶNG là cách một lượt chạy hỏng mà không ai biết nó hỏng ở
+        # đâu. Mỗi chặng nói ra mình đứng ở màn nào sau khi đi.
+        function Buoc($ten, $mau, $cho = 700) {
+            $ok = Toi-Nut $mau
+            if ($ok) { Bam-Bang-Space; Start-Sleep -Milliseconds $cho }
+            Write-Host ("       {0} {1,-26} → màn '{2}'" -f $(if ($ok) { '·' } else { '✗' }), $ten, (Man-Hien-Tai)) `
+                -ForegroundColor $(if ($ok) { 'DarkGray' } else { 'DarkYellow' })
+            return $ok
+        }
+
+        $b['chọn nguồn'] = Buoc 'chọn nguồn' '*Lấy lại dung lượng*'
+        $b['quét'] = Buoc 'quét' '*Quét dữ liệu cũ hơn 12 tháng*' 4500
         $c = Cay
         $b['ra kết quả quét'] = (CoChu $c '*Số tệp*')
 
-        $b['xem danh sách'] = Toi-Nut '*Xem danh sách tệp sắp mất*'
-        if ($b['xem danh sách']) { Bam-Bang-Space; Start-Sleep -Seconds 3 }
+        $b['xem danh sách'] = Buoc 'xem danh sách' '*Xem danh sách tệp sắp mất*' 3500
         $c = Cay
         $b['thấy danh sách tệp'] = (CoChu $c '*Những tệp sắp mất*')
         Chup 'bp01-xem-danh-sach'
 
         Phim $VK.ESC; Start-Sleep -Seconds 1        # BP-06, quay về kết quả quét
+        Ghi ("sau Esc: màn '{0}'" -f (Man-Hien-Tai))
 
         # ---- sao lưu, gồm cả gõ đường dẫn vào ô nhập bằng bàn phím
-        $b['vào màn sao lưu'] = Toi-Nut '*Sao lưu trước khi xóa*'
-        if ($b['vào màn sao lưu']) { Bam-Bang-Space; Start-Sleep -Seconds 2 }
+        $b['vào màn sao lưu'] = Buoc 'vào màn sao lưu' '*Sao lưu trước khi xóa*' 2000
         $dich = Join-Path $env:TEMP ('k1sl_' + [Guid]::NewGuid().ToString('N').Substring(0, 6))
         # Ô nhập đứng trước nút; Tab một lần từ đầu màn là tới nó.
         for ($i = 0; $i -lt 6; $i++) {
@@ -511,7 +537,8 @@ if (Lam 'BP-01') {
         # người khác đang mở. Hỏi UIA xem ô đang có gì, rồi xóa đúng bấy nhiêu
         # ký tự — thường là không có gì để xóa.
         $cu = Doc-O-Nhap
-        Ghi ("ô nhập đang có {0} ký tự" -f $cu.Length)
+        Ghi ("ô nhập đang có {0} ký tự (đọc bằng {1}), tiêu điểm ở {2}" -f `
+            $cu.Length, $script:CachDoc, (TieuDiem).Loai)
         if ($cu.Length -gt 0) { Phim $VK.END; Phim $VK.BS $cu.Length 40 }
         GoChu $dich
         Start-Sleep -Milliseconds 500
@@ -520,10 +547,9 @@ if (Lam 'BP-01') {
         # nên báo "chưa gõ được" trong khi tay vẫn sao lưu xong 31 tệp vào
         # đúng thư mục ấy — hai kết quả chọi nhau, và cái sai là phép đo.
         $trong_o = Doc-O-Nhap
-        Ghi "ô nhập sau khi gõ: '$trong_o'"
+        Ghi ("ô nhập sau khi gõ: '{0}' (đọc bằng {1}); cần '{2}'" -f $trong_o, $script:CachDoc, $dich)
         $b['gõ được đường dẫn'] = ($trong_o -eq $dich)
-        $b['bắt đầu sao lưu']   = Toi-Nut '*Bắt đầu sao lưu*'
-        if ($b['bắt đầu sao lưu']) { Bam-Bang-Space; Start-Sleep -Seconds 5 }
+        $b['bắt đầu sao lưu'] = Buoc 'bắt đầu sao lưu' '*Bắt đầu sao lưu*' 6000
         $b['sao lưu xong'] = ((Dem-Tep $dich) -ge $truoc)
         Ghi ("sao lưu: {0} tệp ở {1}" -f (Dem-Tep $dich), $dich)
 
@@ -593,7 +619,11 @@ if (Lam 'BP-01') {
         }
         Remove-Item $dich -Recurse -Force -EA SilentlyContinue
     } catch {
-        Assert $script:MucDangChay 'chạy trọn phần này, không đứt giữa chừng' $false $_.Exception.Message
+        # In cả KIỂU ngoại lệ và DÒNG ném ra. "Access is denied" trần trụi thì
+        # không truy được về đâu, mà mỗi lượt chạy lại tốn một cửa sổ máy yên tĩnh.
+        Assert $script:MucDangChay 'chạy trọn phần này, không đứt giữa chừng' $false `
+            ("{0}: {1}  (dòng {2}: {3})" -f $_.Exception.GetType().Name, $_.Exception.Message,
+                $_.InvocationInfo.ScriptLineNumber, $_.InvocationInfo.Line.Trim())
     } finally {
         Dong-App $p
         Remove-Item $sb -Recurse -Force -EA SilentlyContinue

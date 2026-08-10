@@ -3,7 +3,7 @@
 > Đầu vào: [`docs/ui-ux-council.md`](ui-ux-council.md) mục 9 · [`docs/rust-port-brief.md`](rust-port-brief.md)
 > Ngày: **01/08/2026** · Trạng thái mã nguồn tại thời điểm chốt: `e30e2ee`
 >
-> **Tình trạng: 11/13 đã quyết.** Hai câu còn lại là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**.
+> **Tình trạng: 11/14 đã quyết.** Hai câu cũ còn treo là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**. Câu thứ mười bốn, `Q14`, thì **có chặn** — nó là một mục tiếp cận mức 1.
 >
 > **Cách đọc:** mục ✅ là đã quyết, có bằng chứng đo được ngay trong tài liệu này.
 > Mục ❓ là còn chờ chủ dự án, và ghi rõ nó đang chặn cái gì.
@@ -29,6 +29,7 @@
 | 11 | Hai bản dùng chung tệp cấu hình | ✅ chia ba cách |
 | 12 | Nút "Tiếp tục phần còn lại" | ✅ bỏ |
 | 13 | Đóng M6 khi cổng tái lập không đạt | ✅ **phương án A** |
+| **14** | **`BP-01` và `BP-05` đâm nhau: có mở đường bàn phím tới lệnh xóa không** | ❓ **chờ chủ dự án · CHẶN mức 1** |
 
 ---
 
@@ -286,3 +287,44 @@ B và C mua thêm được một tầng cho nhóm người đã có sẵn một 
 ### A **không** trả lời Q1
 
 Ký số vẫn chưa quyết. A chỉ nói "không chặn phát hành vì chuyện tái lập"; nó không nói gì về SmartScreen. Bản phát hành vẫn **chưa ký**, và tài liệu vẫn phải nói thẳng chuyện đó.
+
+---
+
+## ❓ Q14 — `BP-01` và `BP-05` đâm nhau · **chờ chủ dự án · CHẶN mức 1**
+
+Đo được, không phải suy ra. `kiem-muc-1.ps1 -Chi BP-01` chạy trọn kịch bản của hội đồng trên giao diện thật, rút chuột ra hoàn toàn:
+
+**14/14 chặng tới trước lệnh xóa: đạt.** Kể cả gõ đường dẫn vào ô nhập bằng bàn phím rồi sao lưu thật 31 tệp.
+
+**Chặng cuối: không.** Đứng đúng trên trang xác nhận, nút đã BẬT sau khi gõ `XÓA`, bấm cả `Space` lẫn `Enter` — **0 tệp mất**.
+
+### Hai mục mức 1 nói ngược nhau
+
+| | |
+|:---|:---|
+| `BP-01` | *"Mọi hành động làm được bằng bàn phím."* Cổng **1** |
+| `BP-05` điều 1 | *"Không có nút mặc định. Enter không kích hoạt gì, **bất kể tiêu điểm ở đâu**."* Cổng **1** |
+
+Mã đã chọn phía `BP-05`. `ve_xac_nhan_xoa` **nuốt sạch** mọi cú bấm của khung nào có `Enter` hoặc `Space`, vì `Response::clicked()` của egui trả `true` cho cả hai y hệt bấm chuột — nếu không nuốt thì điều 1 và điều 2 bị lách ngay ở tầng thư viện, chỗ máy trạng thái không nhìn thấy được.
+
+Hệ quả: **người chỉ dùng bàn phím không xóa được bằng bản đồ họa.** Họ đi được trọn con đường, thấy nút sáng lên, rồi dừng ở đó.
+
+### Mười điều có chừa một khe
+
+- **Điều 1 cấm `Enter` dứt khoát** — chỗ này không bàn lại.
+- **Điều 8** cấm *phím tắt* trỏ vào nút xóa. "Tab tới nút rồi bấm Space" không phải phím tắt.
+- **Điều 6** thì nói ngược lại: *"Chỉ chấp nhận một lần nhấn **trọn vẹn** (key-down **và** key-up cùng xảy ra khi trang đang mở). Phím giữ từ màn trước không tính."* Câu ấy **giả định là có** một lần nhấn được chấp nhận — nó chỉ loại phím tự lặp và phím giữ sẵn từ màn trước.
+
+Tức mười điều cho phép đúng một đường: **`Space` trên nút đang có tiêu điểm**, nhận đúng một lần nhấn trọn vẹn bắt đầu trên chính trang này, sau khi hết khóa mồi 600 ms.
+
+### Ba phương án
+
+| | Làm gì | Được | Mất |
+|:-:|:---|:---|:---|
+| **A** | **Giữ nguyên.** Bàn phím không xóa được; `zalo-cli.exe` là đường tiếp cận | Không đụng vào chỗ nguy hiểm nhất. Hội đồng đã ghi sẵn ở `ĐM-08` rằng bản dòng lệnh là **đường tiếp cận chính thức**, không phải bản rút gọn | `BP-01` **không đạt**, và nó là cổng mức 1. Người dùng bàn phím bị đẩy sang công cụ khác giữa chừng |
+| **B** | **Mở `Space`** theo đúng điều 6: nhận một lần nhấn trọn vẹn, bắt đầu trên trang này, không phải tự lặp, sau khóa mồi | `BP-01` đạt mà `BP-05` không bị nới | Sửa **chỗ nguy hiểm nhất của cả công cụ**. Phải chạy lại trọn `§8.1-1` và thêm phép thử cho ca "giữ Space từ màn trước" |
+| **C** | Thêm một cử chỉ riêng, ví dụ giữ `Space` **1,5 giây** trên nút | Ma sát còn mạnh hơn chuột | Không có trong mười điều; là phát minh thêm luật. Và người khó vận động thì giữ phím lâu là rào cản mới |
+
+**Chưa chọn.** Đây là sửa chỗ mà một lỗi hụt sẽ mở lại đúng cái lỗ `§8.1-1` sinh ra để canh, nên nó phải là quyết định của chủ dự án chứ không phải của người viết mã.
+
+Cho tới lúc đó, trạng thái đúng để ghi vào tài liệu phát hành là: **chỉ có bàn phím thì dùng `zalo-cli.exe`.**

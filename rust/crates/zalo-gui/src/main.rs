@@ -14,6 +14,20 @@ fn main() -> eframe::Result<()> {
     let (byte_phong, nguon) = phong::nap();
     let goc = doc_tham_so_root();
 
+    // KHÓA MỘT TIẾN TRÌNH MỘT LÚC (`R-16`), lấy trước khi mở cửa sổ.
+    //
+    // Bị chặn thì **vẫn mở cửa sổ**, chỉ vẽ một màn nói ai đang giữ. Chết lặng
+    // là người dùng bấm biểu tượng, không thấy gì, rồi bấm tiếp — và kết luận
+    // công cụ hỏng. Cửa sổ ấy cũng là thứ trình đọc màn hình đọc được.
+    //
+    // Khóa giao thẳng cho `UngDung` giữ, không giữ ở đây: cuộc bàn giao của
+    // `RB-08` phải **nhả khóa** trước khi khởi chạy bản dòng lệnh, và chỗ bấm
+    // nút nằm trong ứng dụng.
+    let (khoa, chan_boi) = match zalo_core::lock::vao("zalo-gui") {
+        zalo_core::lock::KetQuaKhoa::DiTiep(k) => (Some(k), None),
+        zalo_core::lock::KetQuaKhoa::BanKhacDangMo(ai) => (None, Some(ai)),
+    };
+
     let tuy_chon = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Dọn dẹp Zalo")
@@ -30,7 +44,7 @@ fn main() -> eframe::Result<()> {
         tuy_chon,
         Box::new(move |cc| {
             dat_phong(&cc.egui_ctx, byte_phong);
-            Ok(Box::new(ung_dung::UngDung::moi(nguon, goc)))
+            Ok(Box::new(ung_dung::UngDung::moi(nguon, goc, chan_boi, khoa)))
         }),
     )
 }

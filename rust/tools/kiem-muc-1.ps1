@@ -38,11 +38,11 @@
 #>
 param(
     [string[]]$Chi = @('tat-ca'),
-    [string]$ThuMucAnh = (Join-Path $env:TEMP 'kiem-muc-1'),
-    # Bật trình đọc màn hình Narrator thật. Mặc định TẮT vì nó nói thành tiếng
-    # và có thể hiện hộp thoại chào mừng.
-    [switch]$KemNarrator
+    [string]$ThuMucAnh = (Join-Path $env:TEMP 'kiem-muc-1')
 )
+# Từng có `-KemNarrator` để bật Narrator thật mà thử phép dò. Bỏ đi cùng với
+# phép dò: sau `Q15` phương án C thì đường lui **luôn** có mặt, không hỏi han gì,
+# nên chẳng còn gì để dò mà thử. Số đo dẫn tới quyết định ấy nằm ở `Q15`.
 
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
@@ -1049,137 +1049,109 @@ if (Lam 'MAU') {
     } finally { Dong-App $p; Remove-Item $sb -Recurse -Force -EA SilentlyContinue; Don-Nhat-Ky }
 }
 
-# ═════════════════════════════════ ⑥ ĐM-08 · trình đọc màn hình
+# ═════════════════════════════════ ⑥ ĐM-08 · đường lui sang bản dòng lệnh
+#
+# Hợp đồng ĐỔI sau `Q15` phương án C: **không còn phép dò nào**.
+#
+# Bản cũ chỉ mở đường lui khi cờ `SPI_GETSCREENREADER` bật. Đem đo thì Narrator
+# — trình đọc màn hình có sẵn của chính Windows — chạy 20 giây mà cờ không hề
+# lên, nên người dùng Narrator không bao giờ thấy đường lui. Hai tín hiệu thay
+# thế cũng đã đo và cùng hỏng.
+#
+# Nên phép thử ở đây đảo chiều: nó chứng minh đường lui có mặt **khi không bật
+# trình đọc màn hình nào cả**. Không còn phép dò thì không còn ca dò trượt.
 if (Lam 'DM-08') {
-    Muc 'ĐM-08 · phát hiện trình đọc màn hình và mở đường lui'
+    Muc 'ĐM-08 · đường lui luôn có mặt, và bàn giao đúng RB-08'
     $SPI_GETSCREENREADER = 0x0046
-    $SPI_SETSCREENREADER = 0x0047
     $co = $false
     [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$co, 0)
-    Ghi "SPI_GETSCREENREADER lúc bắt đầu: $co"
+    Ghi "SPI_GETSCREENREADER lúc bắt đầu: $co  (không dùng tới nữa — xem Q15)"
+    Assert 'ĐM-08-0' 'Không có trình đọc màn hình nào đang bật, để phép thử nói được điều gì' `
+        (-not $co) 'cờ đang bật sẵn — phép thử dưới không phân biệt được "luôn hiện" với "hiện vì dò thấy"'
 
-    # Với `-KemNarrator`: bật một trình đọc màn hình THẬT và **để nó chạy suốt**
-    # phần kiểm giao diện.
-    #
-    # Bản đầu bật Narrator, kiểm cái cờ, rồi TẮT Narrator đi mới mở ứng dụng lên
-    # — tức là vẫn đang kiểm cái cờ do chính mình đặt, chứ không kiểm Narrator.
-    # Hai vế ấy tách ra thì vế nào cũng xanh mà chỗ nối giữa chúng không ai canh.
     $sb = Moi-Hop-Cat 6
     $p = $null
-    $daDat = $false
-    $narChay = $false
     try {
-        if ($KemNarrator) {
-            # Bật Narrator qua `explorer.exe` chứ không `Start-Process` thẳng:
-            # explorer chạy ở mức toàn vẹn trung bình nên tiến trình con KHÔNG
-            # nâng quyền. Khởi động từ một phiên quản trị thì Narrator sống được
-            # 6 giây rồi tự thoát — đã đo, và suýt bị đọc nhầm thành "Narrator
-            # không bật cờ".
-            & explorer.exe (Join-Path $env:SystemRoot 'System32\Narrator.exe')
-            $narChay = $true
-            $bat = $false
-            for ($i = 0; $i -lt 40; $i++) {
-                Start-Sleep -Milliseconds 500
-                [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$bat, 0)
-                if ($bat) { break }
-            }
-            $songSot = @(Get-Process Narrator -EA SilentlyContinue).Count
-            Ghi ("Narrator: {0} tiến trình · SPI_GETSCREENREADER = {1}" -f $songSot, $bat)
-            Assert 'ĐM-08a0' 'Narrator chạy được và sống qua 20 giây, để mà đo' ($songSot -ge 1) `
-                'Narrator tự thoát — khởi động từ phiên quản trị thì đây là lý do'
-
-            # KHÔNG làm nhẹ phép thử này. Nó đỏ vì một lỗ THẬT.
-            Assert 'ĐM-08a' 'Trình đọc màn hình THẬT (Narrator) tự bật SPI_GETSCREENREADER' $bat `
-                ('Narrator chạy 20 giây mà cờ KHÔNG lên. Phép dò của ĐM-08 chỉ đọc cờ này, ' +
-                 'nên người dùng Narrator KHÔNG BAO GIỜ thấy dải đường lui. Đã đo thêm hai ' +
-                 'tín hiệu thay thế, cả hai đều hỏng: UiaClientsAreListening trả True kể cả ' +
-                 'khi không có gì chạy, còn HKLM\...\Accessibility\Configuration thì Windows ' +
-                 'không ghi. Xem Q15 trong docs/quyet-dinh.md.')
-
-            if (-not $bat) {
-                # Cờ không lên thì mọi phép thử dải thông báo ở dưới đo vào hư
-                # không. Đặt cờ bằng tay, và NÓI RÕ là từ đây chỉ còn đo PHẢN
-                # ỨNG của giao diện, không đo phép dò nữa.
-                #
-                # KHÔNG tắt Narrator ở đây. Giết nó rồi mở ứng dụng ngay thì cây
-                # UIA đọc ra rỗng vài giây và bốn phép thử dưới đỏ vì lý do
-                # chẳng liên quan — đã dính đúng bẫy ấy một lượt. Để Narrator
-                # chạy cùng còn gần thực tế hơn: người dùng thật có cả hai.
-                ConNguoi 'ĐM-08' ('Phép dò bỏ sót Narrator — xem Q15. Phần dưới chỉ chứng minh giao ' +
-                    'diện phản ứng ĐÚNG khi cờ bật; nó không chứng minh cờ ấy có bao giờ bật.')
-                Ghi 'Cờ không lên → đặt cờ bằng tay, Narrator vẫn chạy, đo tiếp phản ứng giao diện.'
-                [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 1, [IntPtr]::Zero, 0)
-                $daDat = $true
-            }
-        } else {
-            ConNguoi 'ĐM-08a' 'Bật NVDA thật (máy này chưa cài) và xem dải thông báo có hiện ra không. Chạy lại với -KemNarrator để thử bằng Narrator của Windows.'
-            Ghi 'Bỏ qua vế Narrator (chạy lại với -KemNarrator để bật). Máy này CHƯA CÀI NVDA.'
-            [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 1, [IntPtr]::Zero, 0)
-            $daDat = $true
-            $x = $false
-            [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$x, 0)
-            Assert 'ĐM-08b' 'Đặt được cờ trình đọc màn hình để thử' $x ''
-        }
-
+        Remove-Item (Join-Path $env:TEMP 'zalocleanup.lock') -Force -EA SilentlyContinue
         $p = Mo-App $sb 0 0 $false
-        Start-Sleep -Seconds 5              # app dò lại theo nhịp 3 giây
+        Start-Sleep -Seconds 2
         $c = Cay
-        Chup 'dm08-dai-duong-lui'
-        # Đọc được cây trước đã. Không có vế này thì một cây rỗng làm bốn phép
-        # thử dưới đỏ hết, và báo cáo đọc như thể dải thông báo hỏng — trong khi
-        # thứ hỏng là chỗ đọc.
+        Chup 'dm08-duong-lui'
         Assert 'ĐM-08b0' 'Đọc được cây widget của ứng dụng, để mà đo' (@($c).Count -ge 3) `
             "chỉ thấy $(@($c).Count) phần tử — ứng dụng chưa lên hoặc UIA đang bận"
-        Assert 'ĐM-08c' 'Dải thông báo hiện ra và nói rõ bản dòng lệnh là đường chính thức' `
-            (CoChu $c '*đường tiếp cận chính thức*') 'không thấy câu nhắn nào'
+
+        # ① Vế chính của phương án C.
+        Assert 'ĐM-08a' 'Đường lui có mặt KHI KHÔNG bật trình đọc màn hình nào' `
+            (CoChu $c '*đường tiếp cận chính thức*') `
+            'không thấy — phương án C chưa vào, hoặc đâu đó còn một phép dò sót lại'
         $nut = Tim $c 'Mở bản dòng lệnh'
-        Assert 'ĐM-08d' 'Có nút [Mở bản dòng lệnh] và nút ấy đang bật' ([bool]($nut -and $nut.Bat)) ''
+        Assert 'ĐM-08b' 'Có nút [Mở bản dòng lệnh] và nút ấy đang bật' ([bool]($nut -and $nut.Bat)) ''
 
-        # Dải phải hiện trên MỌI màn hình, không chỉ trang chủ. Đây là chỗ dễ
-        # sai nhất của ĐM-08: người ta bật trình đọc màn hình lúc đã đi sâu vào
-        # giữa luồng, và đó đúng là lúc cần đường lui nhất.
+        # ② Câu chữ không được nói dối. Không dò gì thì đừng bảo mình vừa phát hiện.
+        $dai = ($c | Where-Object { $_.Ten -like '*đường tiếp cận chính thức*' } | Select-Object -First 1)
+        Assert 'ĐM-08c' 'Câu nhắn KHÔNG tự nhận là vừa phát hiện ra trình đọc màn hình' `
+            ($dai -and $dai.Ten -notlike '*Phát hiện*') "câu đang là: $($dai.Ten)"
+
+        # ③ Đi sâu vào giữa luồng thì đường lui vẫn còn.
         [void](Di-An-Toan '*Xem vùng bảo vệ*' 2000)
-        $sau_khi_di = Man-Hien-Tai
-        Ghi "đã đi tới màn '$sau_khi_di'"
-        Assert 'ĐM-08e' 'Dải vẫn hiện khi đã đi sâu vào giữa luồng' `
-            ((CoChu (Cay) '*đường tiếp cận chính thức*') -and $sau_khi_di -like '*bảo vệ*') `
-            'dải biến mất khi rời trang chủ, hoặc không rời được trang chủ để mà kiểm'
+        $man = Man-Hien-Tai
+        Assert 'ĐM-08d' 'Đường lui vẫn còn khi đã đi sâu vào giữa luồng' `
+            ((CoChu (Cay) '*đường tiếp cận chính thức*') -and $man -like '*bảo vệ*') `
+            "đang ở màn '$man'"
 
-        # Bấm thật, và xem bản dòng lệnh có chạy lên không.
+        # ④ VÀ PHẢI VẮNG MẶT trên trang xác nhận xóa.
+        #
+        # `BP-05` điều 4 ghim thứ tự Tab là "ô nhập → Hủy → Xóa". Một nút mở công
+        # cụ khác chen vào đó là sửa một trong mười điều, và nó tranh chỗ với đúng
+        # lời cảnh báo người dùng cần đọc. Đây là phép thử **chặn**, không phải
+        # phép thử mở — thiếu nó thì phương án C lặng lẽ đụng vào BP-05.
+        [void](Di-An-Toan '*Quay lại*' 1500)
+        [void](Di-An-Toan '*Lấy lại dung lượng*' 1500)
+        [void](Di-An-Toan '*Quét dữ liệu cũ hơn 12 tháng*' 4500)
+        [void](Di-An-Toan '*Xem danh sách tệp sắp mất*' 4000)
+        [void](Di-An-Toan '*Quay lại*' 1500)
+        [void](Di-An-Toan '*Xóa vĩnh viễn…*' 2500)
+        $c2 = Cay
+        $tren_xac_nhan = CoChu $c2 '*Gõ đúng chữ*'
+        Chup 'dm08-vang-mat-o-trang-xac-nhan'
+        Assert 'ĐM-08e' 'Đường lui VẮNG MẶT trên trang xác nhận xóa (BP-05 điều 4)' `
+            ($tren_xac_nhan -and -not (CoChu $c2 '*đường tiếp cận chính thức*')) `
+            $(if ($tren_xac_nhan) { 'dải vẫn hiện — nó chen vào thứ tự Tab mà điều 4 đã ghim' }
+              else { 'không tới được trang xác nhận để mà đo' })
+        Phim $VK.ESC; Start-Sleep -Seconds 1
+
+        # ⑤ Cuộc BÀN GIAO của `RB-08`: nhả khóa → khởi chạy → tự thoát.
+        #
+        # Ba vế phải đúng CẢ BA. Thiếu vế nhả khóa thì bản dòng lệnh mở lên, thấy
+        # khóa còn người giữ, in một dòng rồi thoát — người dùng nhận được một
+        # cửa sổ console chớp lên rồi tắt.
+        $khoa_truoc = (Get-Content (Join-Path $env:TEMP 'zalocleanup.lock') -Raw -EA SilentlyContinue)
+        Ghi "khóa trước khi bàn giao: $($khoa_truoc -replace "`t", ' · ')"
+        Assert 'ĐM-08f' 'Bản đồ họa đang thật sự GIỮ khóa một-tiến-trình-một-lúc' `
+            ($khoa_truoc -like '*zalo-gui*') 'không thấy zalo-gui trong tệp khóa — R-16 chưa nối vào'
+
         $truoc_cli = @(Get-Process zalo-cli -EA SilentlyContinue).Count
         $bam = Bam-Qua-UIA 'Mở bản dòng lệnh'
-        Start-Sleep -Seconds 3
+        Start-Sleep -Seconds 4
+        $p.Refresh()
         $sau_cli = @(Get-Process zalo-cli -EA SilentlyContinue).Count
-        Assert 'ĐM-08f' 'Bấm nút thì bản dòng lệnh chạy lên thật' ($bam -and $sau_cli -gt $truoc_cli) `
+        Assert 'ĐM-08g' 'Bàn giao: bản dòng lệnh chạy lên THẬT' ($bam -and $sau_cli -gt $truoc_cli) `
             "gọi được nút: $bam; trước $truoc_cli, sau $sau_cli tiến trình zalo-cli"
+        Assert 'ĐM-08h' 'Bàn giao: bản đồ họa TỰ THOÁT, không đẻ thêm tiến trình' $p.HasExited `
+            'hai bản cùng sống — đây là sinh sản, không phải bàn giao (RB-08)'
+        # Bản dòng lệnh còn SỐNG sau 4 giây nghĩa là nó xin được khóa. Bị chặn thì
+        # nó in một dòng rồi thoát ngay.
+        Assert 'ĐM-08i' 'Bàn giao: khóa đã nhả thật — bản dòng lệnh không bị chính ta chặn' `
+            ($sau_cli -gt $truoc_cli) 'zalo-cli đã tắt ngay — nhiều khả năng nó bị khóa cũ chặn'
         Get-Process zalo-cli -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
-
-        # Vế cuối, và là vế dễ quên nhất: TẮT trình đọc màn hình đi thì dải phải
-        # BIẾN MẤT. Một dải luôn hiện là một dải người ta học cách không đọc, và
-        # phép dò lúc ấy chứng minh được đúng con số không.
-        if ($narChay) { Stop-Process -Name Narrator -Force -EA SilentlyContinue; $narChay = $false }
-        if ($daDat) { [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 0, [IntPtr]::Zero, 0); $daDat = $false }
-        $tat = $true
-        for ($i = 0; $i -lt 20; $i++) {
-            Start-Sleep -Milliseconds 500
-            [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$tat, 0)
-            if (-not $tat) { break }
-        }
-        Ghi "sau khi tắt trình đọc màn hình, cờ = $tat"
-        Start-Sleep -Seconds 5          # app dò lại theo nhịp 3 giây
-        Assert 'ĐM-08g' 'Tắt trình đọc màn hình thì dải thông báo BIẾN MẤT' `
-            ((-not $tat) -and -not (CoChu (Cay) '*đường tiếp cận chính thức*')) `
-            'dải vẫn còn — nó không thật sự dò lại, mà chỉ hiện ra một lần rồi ở lì'
     } catch {
-        Assert $script:MucDangChay 'chạy trọn phần này, không đứt giữa chừng' $false $_.Exception.Message
+        Assert $script:MucDangChay 'chạy trọn phần này, không đứt giữa chừng' $false `
+            ("{0}: {1}  (dòng {2})" -f $_.Exception.GetType().Name, $_.Exception.Message,
+                $_.InvocationInfo.ScriptLineNumber)
     } finally {
         Dong-App $p
-        if ($narChay) { Stop-Process -Name Narrator -Force -EA SilentlyContinue }
-        if ($daDat) { [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 0, [IntPtr]::Zero, 0) }
-        $z = $true
-        [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$z, 0)
-        Ghi "SPI_GETSCREENREADER sau khi dọn: $z"
         Get-Process zalo-cli -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
+        Remove-Item (Join-Path $env:TEMP 'zalocleanup.lock') -Force -EA SilentlyContinue
         Remove-Item $sb -Recurse -Force -EA SilentlyContinue
         Don-Nhat-Ky
     }

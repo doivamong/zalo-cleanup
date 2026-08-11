@@ -3,7 +3,7 @@
 > Đầu vào: [`docs/ui-ux-council.md`](ui-ux-council.md) mục 9 · [`docs/rust-port-brief.md`](rust-port-brief.md)
 > Ngày: **01/08/2026** · Trạng thái mã nguồn tại thời điểm chốt: `e30e2ee`
 >
-> **Tình trạng: 12/15 đã quyết.** Hai câu cũ còn treo là quyết định chi tiền và phạm vi, không chặn thiết kế. Câu thứ mười lăm, `Q15`, thì **có chặn** — nó là một mục tiếp cận mức 1.
+> **Tình trạng: 13/15 đã quyết.** Hai câu còn treo là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**.
 >
 > **Cách đọc:** mục ✅ là đã quyết, có bằng chứng đo được ngay trong tài liệu này.
 > Mục ❓ là còn chờ chủ dự án, và ghi rõ nó đang chặn cái gì.
@@ -30,7 +30,7 @@
 | 12 | Nút "Tiếp tục phần còn lại" | ✅ bỏ |
 | 13 | Đóng M6 khi cổng tái lập không đạt | ✅ **phương án A** |
 | **14** | **`BP-01` và `BP-05` đâm nhau: có mở đường bàn phím tới lệnh xóa không** | ✅ **phương án B**, đã kiểm trên màn hình thật |
-| **15** | **Phép dò của `ĐM-08` bỏ sót Narrator — làm gì** | ❓ **chờ chủ dự án · CHẶN mức 1** |
+| **15** | **Phép dò của `ĐM-08` bỏ sót Narrator — làm gì** | ✅ **phương án C** · bỏ hẳn phép dò, và làm `R-16` trước |
 
 ---
 
@@ -368,7 +368,7 @@ Kèm `BP-04` 3/3 và `§8.1-3` 5/5 chạy lại sau khi đổi — hai bộ ấy
 
 ---
 
-## ❓ Q15 — Phép dò của `ĐM-08` bỏ sót Narrator · **chờ chủ dự án · CHẶN mức 1**
+## ✅ Q15 — Phép dò của `ĐM-08` bỏ sót Narrator · **chủ dự án chọn C, đã làm và đã đo**
 
 `ĐM-08` là mục **mức 1**, và cả phép dò của nó nằm gọn trong một dòng: đọc cờ `SPI_GETSCREENREADER`.
 
@@ -406,4 +406,57 @@ Phản ứng của giao diện thì **không hỏng** — đã đo riêng, 7/7: 
 | **B** | **Thêm phép dò theo tên tiến trình** cho các trình đã biết (`Narrator`, `nvda`, `jfw`…) | Bịt đúng lỗ đã đo, và `duong_lui.rs` vốn chỉ dùng phép dò để **thêm** một lối đi nên dương tính giả không hại gì | Danh sách tên phải bảo trì; trình mới ra vẫn sót |
 | **C** | **Bỏ hẳn phép dò**: luôn có một lối mở bản dòng lệnh, đặt kín đáo | Không bao giờ sót ai | Trái `RB-07`, chỗ hội đồng đã cân nhắc và chốt là **không** ship nút thường trực — xem `Q7` |
 
-**Chưa chọn.** `B` là thứ tôi nghiêng về nhất: nó bịt đúng lỗ đã đo được, và nguyên tắc tự ghi trong `duong_lui.rs` — *"phép dò này chỉ được dùng để **thêm** một lối đi… dùng nó để đổi hành vi là phạt người dùng vì một phép dò có thể sai"* — nói rằng dương tính giả ở đây không gây hại. Nhưng `C` thì đụng vào một quyết định hội đồng đã chốt, nên vẫn phải hỏi.
+### Chủ dự án chọn **C**
+
+Và hóa ra `C` **không** đụng vào quyết định nào của hội đồng — tôi đọc `RB-07` sai lúc đặt câu hỏi.
+
+`RB-07` không cấm nút thường trực trên nguyên tắc. Nguyên văn: *"Nếu bản `.ps1` chưa được sửa để lấy khóa đó thì **không ship nút Mở bản dòng lệnh**."* Điều kiện là **khóa**, không phải nguyên tắc. Và `Q7` chốt thứ tự, ghi rõ *"thứ tự này là bắt buộc"*: làm khóa trước, xong khóa thì nút *nên* ship.
+
+### Nhưng điều kiện ấy chưa thỏa, và đó mới là chỗ nặng
+
+Đi kiểm thì thấy: **`R-16` chưa bao giờ được làm.** `lock.rs` chỉ có tám dòng chú thích, không một dòng mã. `contract.rs` khai `LOCK_NAME` và có cả phép thử đối chiếu tên ấy với `ZaloCleanup.ps1`, nên nhìn vào thì tưởng khóa đã có — nhưng **không chỗ nào gọi tới nó**.
+
+Nghĩa là `zalo-gui`, `zalo-cli` và `ZaloCleanup.ps1` cùng chạy được trên một tập tệp. Đó là mối đe dọa `B8`, hội đồng xếp **NẶNG**.
+
+> Bài học lặp lại lần thứ tám, chỉ khác hình dạng: **một hằng số có phép thử không có nghĩa là cái nó đặt tên cho đã tồn tại.** Phép thử ở `contract.rs` canh tên khóa khớp nhau; nó không canh có ai lấy khóa.
+
+Nên làm theo đúng thứ tự `Q7` đã chốt: **khóa trước, C sau**.
+
+### ① Khóa — `R-16`, giờ mới thật sự có
+
+Bốn hành vi port đúng từ bản PowerShell, mỗi cái một phép thử:
+
+| | |
+|:---|:---|
+| Mutex bị **bỏ rơi** do tiến trình trước chết | tính là **đã nhận khóa**, không phải lỗi. `WAIT_ABANDONED` là ngã dễ đọc nhầm nhất |
+| Dựng mutex **thất bại** | **không chặn người dùng** — thà chạy còn hơn không mở được công cụ vì một cơ chế phụ trợ |
+| Tệp khóa mang **PID + tên + giờ**, ngăn bằng tab | để bản kia nói được *ai* đang giữ, đúng ba trường `Get-LockHolder` đọc |
+| Nhả khóa | trả khóa **thật**, để cuộc bàn giao chạy được |
+
+Đo xuyên tiến trình thật: mở `zalo-gui`, chạy `zalo-cli` → *"Đã có một bản đang mở: tiến trình 23408 (zalo-gui), mở lúc 11/08/2026 20:09:00"*, mã thoát `1`. Đóng bản đồ họa rồi chạy lại → bình thường.
+
+> Một chỗ phép thử của tôi sai chứ không phải mã: mutex Win32 **đệ quy theo luồng**, nên xin lần thứ hai trên **cùng luồng** thì được ngay. Phải xin từ luồng khác mới mô phỏng đúng cảnh hai tiến trình. Bản đầu đỏ, và cái sai nằm ở phép thử.
+
+### ② Rồi mới tới C
+
+Không còn phép dò nào. Đường lui **luôn có mặt**, đặt ở đáy cửa sổ, chữ nhỏ — nó là một lối đi thường trực, không còn là một tin báo động. Câu chữ cũng đổi: không dò gì thì đừng nói *"Phát hiện trình đọc màn hình"*.
+
+**Vắng mặt trên hai màn**, và đây là chỗ cân nhắc chứ không phải chỗ tiện tay bỏ qua:
+
+- **Trang xác nhận xóa** — `BP-05` điều 4 ghim thứ tự Tab là *"ô nhập → Hủy → Xóa"*. Chen một nút nữa vào là sửa một trong mười điều, và một nút mở công cụ khác nằm cạnh nút xóa vĩnh viễn thì tranh chỗ với đúng lời cảnh báo cần đọc.
+- **Màn đang chạy** — bàn giao giữa lúc đang xóa dở là bỏ lại một lượt xóa nửa chừng.
+
+Bàn giao theo đúng `RB-08`: **nhả khóa → khởi chạy → tự thoát**. Thứ tự ấy là cả nội dung của điều luật; nhả sau thì bản dòng lệnh mở lên, thấy khóa còn người giữ, in một dòng rồi thoát — người dùng nhận được một cửa sổ console chớp lên rồi tắt.
+
+### Đo được
+
+| | |
+|:---|:---|
+| `ĐM-08` trên giao diện thật | **11/11** |
+| Đường lui hiện khi **không bật trình đọc màn hình nào** | ✅ — cả điểm của phương án C |
+| Đường lui **vắng mặt** trên trang xác nhận | ✅ phép thử **chặn** |
+| Bàn giao: `zalo-cli` chạy lên thật · GUI **tự thoát** · khóa đã nhả | ✅ cả ba |
+| `67/67` đối chiếu song song · `19/19` liên thông | ✅ khóa không làm vỡ gì |
+| `DPI-04` sau khi thêm dải đáy | ✅ 8/8 màn, 0 tràn |
+
+Và `ĐM-08` **rời khỏi danh sách "cần người thật"**: không còn phép dò thì không còn gì cần một trình đọc màn hình thật để thử.

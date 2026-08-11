@@ -61,6 +61,23 @@ fn main() {
         }
     }
 
+    // KHÓA MỘT TIẾN TRÌNH MỘT LÚC (`R-16`), lấy TRƯỚC khi đụng vào bất cứ gì.
+    //
+    // Giữ `_khoa` sống tới hết `main`: thả sớm là nhả khóa sớm, mà khóa nhả sớm
+    // thì đúng bằng không có khóa.
+    let _khoa = match zalo_core::lock::vao("zalo-cli") {
+        zalo_core::lock::KetQuaKhoa::DiTiep(k) => k,
+        zalo_core::lock::KetQuaKhoa::BanKhacDangMo(ai) => {
+            // CHỈ in ở ngã bị chặn. Đường chạy bình thường không được thêm một
+            // dòng nào — 67 phép thử đầu-cuối so từng dòng đầu ra.
+            println!("Đã có một bản đang mở: {ai}.");
+            println!(
+                "Đóng bản kia rồi mở lại. Hai bản cùng chạy trên một tập tệp là cách mất dữ liệu."
+            );
+            std::process::exit(1);
+        }
+    };
+
     let mut app = ung_dung::UngDung::moi(goc, goc_du_lieu);
     app.chay();
 }

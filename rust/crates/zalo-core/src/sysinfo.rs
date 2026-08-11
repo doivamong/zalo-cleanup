@@ -91,6 +91,116 @@ extern "system" {
     fn Process32FirstW(h_snapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
     fn Process32NextW(h_snapshot: isize, lppe: *mut ProcessEntry32W) -> i32;
     fn CloseHandle(h_object: isize) -> i32;
+    fn CreateMutexW(
+        lp_mutex_attributes: *const u8,
+        b_initial_owner: i32,
+        lp_name: *const u16,
+    ) -> isize;
+    fn WaitForSingleObject(h_handle: isize, dw_milliseconds: u32) -> u32;
+    fn ReleaseMutex(h_mutex: isize) -> i32;
+    fn GetLastError() -> u32;
+}
+
+/// Tay cầm một mutex đặt tên, và trạng thái "ta có đang giữ nó không".
+///
+/// Đây là **vỏ an toàn** cho `lock.rs` dùng, để `unsafe` không rò ra khỏi
+/// mô-đun này — xem luật ở đầu `lib.rs`.
+#[derive(Debug)]
+pub struct MutexDatTen {
+    tay_cam: isize,
+    dang_giu: bool,
+}
+
+/// Kết quả của một lần xin khóa.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum XinKhoa {
+    /// Nhận được khóa.
+    Duoc,
+    /// Một tiến trình khác đang giữ.
+    NguoiKhacGiu,
+    /// Không dựng nổi mutex. **Không được coi là bị chặn** — xem `lock.rs`.
+    KhongDungDuoc,
+}
+
+#[cfg(windows)]
+impl MutexDatTen {
+    /// Xin một mutex đặt tên, chờ **0 mili giây**.
+    ///
+    /// Ba ngã, và ngã thứ ba là ngã dễ làm sai nhất:
+    ///
+    /// | Mã trả về của `WaitForSingleObject` | Nghĩa |
+    /// |---|---|
+    /// | `WAIT_OBJECT_0` (0) | nhận được khóa |
+    /// | `WAIT_TIMEOUT` (0x102) | người khác đang giữ |
+    /// | **`WAIT_ABANDONED` (0x80)** | **tiến trình trước chết mà chưa trả khóa — ta ĐÃ NHẬN được** |
+    ///
+    /// Ngã `WAIT_ABANDONED` phải tính là **đã nhận**, không phải là hỏng. Bản
+    /// PowerShell bắt `AbandonedMutexException` rồi đặt `$created = $true` đúng
+    /// vì lý do ấy; coi nó là lỗi thì một lần treo máy là công cụ không mở lại
+    /// được nữa cho tới khi khởi động lại phiên.
+    pub fn xin(ten: &str) -> (Option<MutexDatTen>, XinKhoa) {
+        const ERROR_ALREADY_EXISTS: u32 = 183;
+        const WAIT_OBJECT_0: u32 = 0;
+        const WAIT_ABANDONED: u32 = 0x80;
+
+        let w: Vec<u16> = ten.encode_utf16().chain(std::iter::once(0)).collect();
+        let h = unsafe { CreateMutexW(std::ptr::null(), 1, w.as_ptr()) };
+        if h == 0 {
+            return (None, XinKhoa::KhongDungDuoc);
+        }
+        let da_co = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+        if !da_co {
+            // `bInitialOwner = TRUE` và mutex chưa từng tồn tại → ta sở hữu ngay.
+            return (
+                Some(MutexDatTen {
+                    tay_cam: h,
+                    dang_giu: true,
+                }),
+                XinKhoa::Duoc,
+            );
+        }
+        let r = unsafe { WaitForSingleObject(h, 0) };
+        let duoc = r == WAIT_OBJECT_0 || r == WAIT_ABANDONED;
+        if duoc {
+            (
+                Some(MutexDatTen {
+                    tay_cam: h,
+                    dang_giu: true,
+                }),
+                XinKhoa::Duoc,
+            )
+        } else {
+            unsafe { CloseHandle(h) };
+            (None, XinKhoa::NguoiKhacGiu)
+        }
+    }
+
+    /// Nhả khóa ra ngay, không đợi tới lúc rơi khỏi phạm vi.
+    ///
+    /// Cần cho cuộc **bàn giao** của `RB-08`: nhả khóa **trước** khi khởi chạy
+    /// bản dòng lệnh, nếu không bản kia mở lên rồi báo "đã có bản khác đang mở".
+    pub fn nha(&mut self) {
+        if self.dang_giu {
+            unsafe { ReleaseMutex(self.tay_cam) };
+            self.dang_giu = false;
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for MutexDatTen {
+    fn drop(&mut self) {
+        self.nha();
+        unsafe { CloseHandle(self.tay_cam) };
+    }
+}
+
+#[cfg(not(windows))]
+impl MutexDatTen {
+    pub fn xin(_ten: &str) -> (Option<MutexDatTen>, XinKhoa) {
+        (None, XinKhoa::KhongDungDuoc)
+    }
+    pub fn nha(&mut self) {}
 }
 
 // `SystemParametersInfoW` nằm ở **user32**, không phải kernel32. Khai nhầm khối

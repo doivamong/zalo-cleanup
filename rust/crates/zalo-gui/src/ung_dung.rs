@@ -91,10 +91,13 @@ pub struct UngDung {
     /// không chỉ im lặng không làm gì.
     chan_vi: Option<String>,
     truoc_do: std::time::Instant,
-    /// `ĐM-08`. Dò một lần lúc mở, rồi dò lại theo nhịp — người dùng có thể bật
-    /// trình đọc màn hình **giữa chừng**, và lúc đó họ càng cần đường lui.
+    /// `ĐM-08`. Chỉ hỏi một lần lúc mở: bản dòng lệnh có nằm cạnh không.
+    ///
+    /// Từng có một bộ đếm dò lại theo nhịp 3 giây, vì phép dò trình đọc màn hình
+    /// có thể đổi kết quả giữa chừng. `Q15` bỏ hẳn phép dò ấy, nên bộ đếm cũng
+    /// đi theo — tệp `zalo-cli.exe` không tự mọc ra cạnh tệp thực thi giữa lúc
+    /// đang chạy.
     duong_lui: DuongLui,
-    lan_do_duong_lui: std::time::Instant,
 
     /// Thư mục đích người dùng gõ vào ở màn sao lưu.
     dich_sao_luu: String,
@@ -118,6 +121,15 @@ pub struct UngDung {
     viec_anh: Option<ViecNen>,
     /// Kết cấu đã nạp vào egui, giữ lại để khỏi nạp lại mỗi khung.
     ket_cau: Vec<Option<egui::TextureHandle>>,
+    /// Có bản khác đang giữ khóa một-tiến-trình-một-lúc không, và ai giữ.
+    ///
+    /// Đặt thì cửa sổ **chỉ vẽ đúng một màn**: nói ai đang giữ, và một nút thoát.
+    /// Vẫn mở cửa sổ chứ không im lặng chết — người dùng bấm vào biểu tượng mà
+    /// chẳng thấy gì xảy ra thì họ bấm tiếp, rồi kết luận công cụ hỏng.
+    chan_boi: Option<String>,
+    /// Khóa một-tiến-trình-một-lúc đang giữ, để **nhả được** lúc bàn giao sang
+    /// bản dòng lệnh (`RB-08`).
+    khoa: Option<zalo_core::lock::Khoa>,
 }
 
 impl UngDung {
@@ -126,7 +138,12 @@ impl UngDung {
     /// Không phải cờ dành cho lập trình viên: máy nào có nhiều tài khoản Zalo,
     /// hoặc có bố cục thư mục lạ, thì phép tự dò chọn nhầm — và một công cụ xóa
     /// dữ liệu chọn nhầm thư mục là chuyện không được để người dùng chịu.
-    pub fn moi(nguon_phong: NguonPhong, goc_chi_dinh: Option<String>) -> Self {
+    pub fn moi(
+        nguon_phong: NguonPhong,
+        goc_chi_dinh: Option<String>,
+        chan_boi: Option<String>,
+        khoa: Option<zalo_core::lock::Khoa>,
+    ) -> Self {
         let goc = goc_chi_dinh
             .filter(|g| !g.trim().is_empty())
             .or_else(tim_goc_zalo)
@@ -156,7 +173,6 @@ impl UngDung {
             chan_vi: None,
             truoc_do: std::time::Instant::now(),
             duong_lui: DuongLui::do_hien_tai(),
-            lan_do_duong_lui: std::time::Instant::now(),
             dich_sao_luu: String::new(),
             xac_minh_toan_bo: false,
             sao_luu_gan_nhat: None,
@@ -166,6 +182,8 @@ impl UngDung {
             anh_dang_giai_ma: false,
             viec_anh: None,
             ket_cau: Vec::new(),
+            chan_boi,
+            khoa,
         }
     }
 
@@ -201,6 +219,26 @@ impl UngDung {
 
 impl eframe::App for UngDung {
     fn update(&mut self, ctx: &egui::Context, _f: &mut eframe::Frame) {
+        // Bị bản khác giữ khóa thì **dừng ngay ở đây**, trước cả vòng thu tin.
+        // Không có nhánh này thì cửa sổ vẫn quét, vẫn xóa được, và cái khóa chỉ
+        // là một dòng chữ.
+        if let Some(ai) = self.chan_boi.clone() {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.tieu_de(ui, "Đã có một bản đang mở");
+                ui.label(format!("{}  {ai}", bieu_tuong::CANH_BAO));
+                ui.add_space(6.0);
+                ui.label(
+                    "Hai bản cùng chạy trên một tập tệp là cách mất dữ liệu: bản này quét \
+                     xong thì bản kia đã xóa mất, và kết quả quét trỏ vào những tệp không \
+                     còn ở đó nữa.",
+                );
+                ui.add_space(12.0);
+                if ui.button("Thoát").clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
+            return;
+        }
         self.thu_tin(ctx);
         self.esc_quay_lai(ctx);
         self.ve_dai_duong_lui(ctx);
@@ -416,23 +454,39 @@ impl UngDung {
     /// Không có nút đóng dải này. `ĐM-05`: thông báo an toàn không tự biến mất,
     /// và cũng không được để người dùng lỡ tay tắt mất.
     fn ve_dai_duong_lui(&mut self, ctx: &egui::Context) {
-        // Dò lại theo nhịp thưa: trình đọc màn hình có thể bật lên giữa chừng.
-        if self.lan_do_duong_lui.elapsed().as_secs() >= 3 {
-            self.duong_lui = DuongLui::do_hien_tai();
-            self.lan_do_duong_lui = std::time::Instant::now();
-        }
-        if !self.duong_lui.nen_hien() {
+        // KHÔNG hiện trên hai màn này, và đây là chỗ cân nhắc chứ không phải chỗ
+        // tiện tay bỏ qua:
+        //
+        // · Trang xác nhận xóa — `BP-05` điều 4 ghim chính xác thứ tự Tab là
+        //   "ô nhập → Hủy → Xóa". Thêm một chặng nữa là sửa một điều của mười
+        //   điều. Và một nút mở công cụ khác nằm cạnh nút xóa vĩnh viễn thì
+        //   tranh chỗ với đúng lời cảnh báo người dùng cần đọc.
+        // · Màn đang chạy — bàn giao giữa lúc đang xóa dở là bỏ lại một lượt xóa
+        //   nửa chừng.
+        //
+        // Người dùng vẫn gặp đường lui ở mọi màn còn lại, kể cả trang chủ, tức
+        // là gặp trước khi đi tới hai màn này.
+        if matches!(self.man, ManHinh::XacNhanXoa | ManHinh::DangLam) {
             return;
         }
         let cau = self.duong_lui.cau();
         let mo_duoc = matches!(self.duong_lui, DuongLui::Co(_));
-        egui::TopBottomPanel::top("duong_lui").show(ctx, |ui| {
-            ui.add_space(4.0);
-            ui.label(format!("{}  {cau}", bieu_tuong::DAN_HUONG));
-            if mo_duoc && ui.button("Mở bản dòng lệnh").clicked() {
-                self.duong_lui.mo();
-            }
-            ui.add_space(4.0);
+        // Đáy chứ không đỉnh, và chữ nhỏ. Sau `Q15` thì nó **luôn** có mặt, nên
+        // nó là một lối đi thường trực chứ không còn là một tin báo động; đặt
+        // trên đỉnh thì mỗi màn hình mở ra đều bắt đầu bằng một dải chữ mà
+        // chín trên mười người không cần.
+        egui::TopBottomPanel::bottom("duong_lui").show(ctx, |ui| {
+            ui.add_space(3.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.small(format!("{}  {cau}", bieu_tuong::DAN_HUONG));
+                if mo_duoc && ui.small_button("Mở bản dòng lệnh").clicked() {
+                    // Bàn giao `RB-08`: nhả khóa → khởi chạy → tự thoát.
+                    if self.duong_lui.ban_giao(&mut self.khoa) {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                }
+            });
+            ui.add_space(3.0);
         });
     }
 

@@ -3,7 +3,7 @@
 > Đầu vào: [`docs/ui-ux-council.md`](ui-ux-council.md) mục 9 · [`docs/rust-port-brief.md`](rust-port-brief.md)
 > Ngày: **01/08/2026** · Trạng thái mã nguồn tại thời điểm chốt: `e30e2ee`
 >
-> **Tình trạng: 11/14 đã quyết.** Hai câu cũ còn treo là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**. Câu thứ mười bốn, `Q14`, thì **có chặn** — nó là một mục tiếp cận mức 1.
+> **Tình trạng: 12/14 đã quyết.** Hai câu còn treo là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**.
 >
 > **Cách đọc:** mục ✅ là đã quyết, có bằng chứng đo được ngay trong tài liệu này.
 > Mục ❓ là còn chờ chủ dự án, và ghi rõ nó đang chặn cái gì.
@@ -29,7 +29,7 @@
 | 11 | Hai bản dùng chung tệp cấu hình | ✅ chia ba cách |
 | 12 | Nút "Tiếp tục phần còn lại" | ✅ bỏ |
 | 13 | Đóng M6 khi cổng tái lập không đạt | ✅ **phương án A** |
-| **14** | **`BP-01` và `BP-05` đâm nhau: có mở đường bàn phím tới lệnh xóa không** | ◐ **chọn B** · luật đã viết, chờ kiểm trên màn hình thật |
+| **14** | **`BP-01` và `BP-05` đâm nhau: có mở đường bàn phím tới lệnh xóa không** | ✅ **phương án B**, đã kiểm trên màn hình thật |
 
 ---
 
@@ -290,7 +290,7 @@ Ký số vẫn chưa quyết. A chỉ nói "không chặn phát hành vì chuy�
 
 ---
 
-## ◐ Q14 — `BP-01` và `BP-05` đâm nhau · **chủ dự án chọn B · chờ kiểm trên màn hình thật**
+## ✅ Q14 — `BP-01` và `BP-05` đâm nhau · **chủ dự án chọn B, đã kiểm trên màn hình thật**
 
 Đo được, không phải suy ra. `kiem-muc-1.ps1 -Chi BP-01` chạy trọn kịch bản của hội đồng trên giao diện thật, rút chuột ra hoàn toàn:
 
@@ -347,13 +347,20 @@ Một chỗ **cố ý không chặn**: tự lặp **không** hủy lần nhấn 
 
 Mã vẽ **không mượn `clicked()` của egui** cho đường này. `clicked()` bắn ở lúc nhấn xuống và không phân biệt được nhấn xuống với nhả ra, mà điều 6 thì đòi đúng một lần nhấn trọn vẹn. Nó đọc thẳng `Event::Key`, vì chỉ sự kiện thô mới nói được `repeat`. Sau chốt `!nuot_bam`, `clicked()` chỉ còn nghĩa **chuột**.
 
-### Chưa xong: phải kiểm lại trên màn hình thật
+### Đã kiểm trên màn hình thật
 
-Đây là sửa **chỗ nguy hiểm nhất của cả công cụ**. Sáu phép thử đơn vị chứng minh **luật** đúng; chúng không chứng minh luật ấy nối đúng vào cửa sổ thật — đúng cái ranh giới mà `§8.1-1` sinh ra để canh, và cũng đúng chỗ egui đã lách một lần rồi.
+Đây là sửa **chỗ nguy hiểm nhất của cả công cụ**. Sáu phép thử đơn vị chứng minh **luật** đúng; chúng không chứng minh luật ấy nối đúng vào cửa sổ thật — đúng cái ranh giới `§8.1-1` sinh ra để canh, và cũng đúng chỗ egui đã lách một lần rồi. Nên bản vá nằm trên nhánh riêng cho tới khi cả hai bộ chạy dưới đây xanh trên máy thật.
 
-Chưa gộp vào `main` cho tới khi hai bộ chạy này xanh trên máy thật:
+**`phep-thu-ma-sat.ps1` — §8.1-1 trọn bộ: 8/8, không đổi.** Đường chuột không bị nới một chốt nào. Giữ Enter, giữ Space, nhấp 200 lần vào tọa độ nút, gõ chữ thường, gõ đúng rồi nhấp ngay — vẫn 0 tệp mất; chờ hết khóa mồi rồi nhấp thì vẫn xóa được thật.
 
-| | |
-|:---|:---|
-| `phep-thu-ma-sat.ps1` | **§8.1-1 trọn bộ.** Giữ Enter, giữ Space, nhấp 200 lần, khóa mồi, và vế kiểm ngược |
-| `kiem-muc-1.ps1 -Chi BP-01` | Ba vế mới: Enter không xóa · giữ Space chưa nhả thì chưa xóa · **nhả ra thì xóa thật** |
+**`kiem-muc-1.ps1 -Chi BP-01` — 4/4.** Số đo đọc thẳng ra luật:
+
+| Sau khi | Còn lại |
+|:---|---:|
+| gõ `Enter` ba lần trên nút đang có tiêu điểm | **30/30 tệp** |
+| giữ `Space` 5 giây, **chưa nhả** | **30/30 tệp** |
+| **nhả `Space` ra** | **0/30 tệp** |
+
+Kèm `BP-04` 3/3 và `§8.1-3` 5/5 chạy lại sau khi đổi — hai bộ ấy cũng chạm vào trang xác nhận.
+
+`BP-01` giờ **đạt**, và `BP-05` không mất gì.

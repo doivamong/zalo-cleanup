@@ -151,7 +151,11 @@ Chín mục ấy từng mang nhãn *không cỗ máy nào kết luận được*
 - **`DPI-04`** — ở 1092×614 dip (màn 1366×768 @125%), **4 trong 12 ô ảnh xem trước** nằm ngoài mép phải, sau một thanh cuộn ngang mà bàn phím không tới được. Lưới ấy tồn tại để người dùng *nhìn thấy* thứ sắp mất; giấu một phần ba số ảnh là bỏ đi đúng phần ma sát nó sinh ra để tạo. Đã sửa thành chia hàng.
 - **`BP-01`** — egui 0.29 để widget đang **tắt** nuốt mất một chặng Tab, nên widget đứng sau nó không bao giờ nhận được tiêu điểm. Dính ba màn; nặng nhất là **trang chủ** khi máy chưa cài Zalo — cả màn hình chết với bàn phím. Đã vá, kèm phép thử ghim lỗ của egui để ngày họ tự sửa thì nó đỏ lên.
 
-Còn lại đúng bốn việc, và không việc nào là mã: `BP-01` cần một cửa sổ **máy yên tĩnh** (bộ chạy chiếm bàn phím của cả máy); ba mục greyscale cần **ba người thử**; `ĐM-08` cần **NVDA thật**; và vụ ứng dụng tự thoát 1/5 lượt khi bị gọi `SetFocus` thì cần thêm số đo.
+Và một lỗi thứ ba, tìm ra khi kịch bản bàn phím của `BP-01` đi tới đó rồi **tắc**: sao lưu xong thì màn `Kết quả` nói *"đã mở khóa bước xóa"* nhưng nút duy nhất ở đó là `Về trang chủ`, mà **trang chủ không có đường nào quay lại kết quả quét**. Người dùng làm đúng thứ giao diện khuyên họ làm rồi mất luôn lượt quét. Đã thêm nút `← Quay lại kết quả quét`.
+
+`BP-01` còn lộ ra chỗ **hai mục mức 1 đâm nhau**: bàn phím đi trọn kịch bản rồi tắc ở đúng nút cuối, vì `BP-05` nuốt cả `Enter` lẫn `Space`. Chốt `Q14` phương án B — mở đúng một đường: `Space` trên nút đang có tiêu điểm, một lần nhấn **trọn vẹn** bắt đầu trên chính trang này. `§8.1-1` chạy lại vẫn **8/8**, và `BP-01` giờ **4/4**: `Enter` ba lần → 30/30 tệp · giữ `Space` 5 giây chưa nhả → 30/30 · nhả ra → **0/30**.
+
+Còn lại đúng ba việc, và không việc nào là mã: ba mục greyscale cần **ba người thử**; `ĐM-08` cần **NVDA thật**; và vụ ứng dụng tự thoát 1/5 lượt khi bị gọi `SetFocus` thì cần thêm số đo.
 
 [`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên phần còn lại sau mỗi lần chạy.
 

@@ -133,7 +133,7 @@ Mỗi mốc có một cổng **đo được**. Không đạt cổng thì không 
 | **M2** Duyệt cây và băm | ✅ **đạt** | Đối chiếu **57.351 tệp, 0 lỗi, 0 khác biệt** · junction không đi xuyên · **0,507 s** so với ngưỡng 1,5 s · **Mốc kiểm điểm bắt buộc nằm ngay sau mốc này** |
 | **M3** Chế độ headless | ✅ **đạt** | **28/28** phép thử đầu-cuối chỉ đọc, cùng một bộ test lái cả hai bản · 5 đột biến, cả năm đều đỏ · lõi 16+61 phép thử đơn vị |
 | **M4** Động tới dữ liệu | ✅ **đạt** | **67/67** phép thử đầu-cuối (kể cả `-Full`) · **19/19** phép liên thông hai chiều, so SHA-256 từng tệp · 8 đột biến, cả tám đều đỏ |
-| **M5** Giao diện | ◐ **gần xong** | exe **3,61 MiB** · **62** phép thử giao diện · **§8.1-1 đạt 8/8** · **`kiem-muc-1.ps1` đã đo 7 trong 9 mục mức 1 trên giao diện thật, bắt được 2 lỗi và đã sửa cả hai** · còn `BP-01` cần máy yên tĩnh, `ĐM-08` cần NVDA thật, và ba mục greyscale cần **ba người thử** |
+| **M5** Giao diện | ◐ **gần xong** | exe **3,61 MiB** · **68** phép thử giao diện · **§8.1-1 đạt 8/8** · **`kiem-muc-1.ps1` đã đo 8 trong 9 mục mức 1 trên giao diện thật, bắt được 3 lỗi và sửa cả ba** · `Q14` chốt phương án B nên `BP-01` **đạt** · còn `ĐM-08` cần NVDA thật và ba mục greyscale cần **ba người thử** |
 | **M6** Phát hành | ◐ **sẵn sàng, CỐ Ý CHƯA CÔNG BỐ** | Máy móc phát hành đã xong và đã kiểm: CI dựng, mã băm khớp cả 5 tệp, hai exe chạy được từ đúng bản tải về. **Chưa gắn thẻ** vì mục tiếp cận mức 1 của M5 chưa xong hết, mà luật của hội đồng ghi mức 1 chặn hẳn bản phát hành. Cổng tái lập không đạt → chốt **phương án A** |
 
 ## M0 · Khung sườn — ✅ đạt
@@ -375,7 +375,7 @@ Dính **ba màn**, và chỗ nặng nhất không phải màn sao lưu mà là *
 | **`MAU-01`** | ✅ 4/4 phần máy. Ký hiệu ↔ câu chữ khớp một-một; trên **ảnh đã bỏ màu**, mỗi mức vẽ ra một hình riêng, và hai dòng cùng mức vẽ ra cùng một hình |
 | **`MAU-09`** | ✅ 4/4 phần máy. Khác chữ, khác biểu tượng, cách nhau **48 dip**, `Hủy` đứng trước theo thứ tự đọc |
 | **`ĐM-08`** | ✅ 5/5 phần máy. Dải hiện ra, nói đúng câu, nút bật, **dải vẫn hiện khi đã đi sâu vào giữa luồng**, và bấm thì `zalo-cli.exe` chạy lên thật |
-| **`BP-01`** | ◐ **14/14 chặng tới trước lệnh xóa đạt.** Chặng cuối không — `BP-05` chặn đường bàn phím tới lệnh xóa. Hai mục mức 1 đâm nhau → `Q14`, chờ chủ dự án |
+| **`BP-01`** | ✅ **4/4 sau khi chốt `Q14` phương án B.** Kịch bản đi trọn bằng bàn phím, kể cả lệnh xóa · `Enter` vẫn không kích hoạt · giữ `Space` chưa nhả thì chưa xóa · nhả ra thì xóa thật |
 
 ##### Bốn kiểu gõ của §8.1-3, vì nó là mục dễ tưởng đã kiểm nhất
 
@@ -419,7 +419,7 @@ Chạy trên máy đã đóng hết ứng dụng khác, rút chuột ra hoàn to
 | quay lại kết quả quét | ✓ *(chặng này chỉ đi được sau khi vá lỗi ③)* |
 | mở trang xác nhận, gõ `XÓA`, nút xóa **bật lên** | ✓ |
 
-**Chặng cuối: KHÔNG.** Đứng đúng trên trang xác nhận, nút đã BẬT, gõ cả `Space` lẫn `Enter` — **0 tệp mất**.
+**Chặng cuối, ở lượt đo đầu: KHÔNG.** Đứng đúng trên trang xác nhận, nút đã BẬT, gõ cả `Space` lẫn `Enter` — **0 tệp mất**.
 
 Đây không phải lỗi. Đây là **`BP-05` đang làm đúng việc của nó**, và hai mục mức 1 đâm thẳng vào nhau:
 
@@ -438,9 +438,15 @@ Mã đã chọn phía `BP-05`: `ve_xac_nhan_xoa` **nuốt sạch** mọi cú b�
 
 Tức mười điều **cho phép** một đường: `Space` trên nút đang có tiêu điểm, nhận đúng một lần nhấn trọn vẹn bắt đầu trên chính trang này, sau khi hết khóa mồi. Làm được thì `BP-01` đạt mà `BP-05` không bị nới.
 
-Nhưng đó là sửa **chỗ nguy hiểm nhất của cả công cụ**, và làm hụt là mở lại đúng cái lỗ mà `§8.1-1` sinh ra để canh. Nên nó là **quyết định của chủ dự án**, không phải việc tôi tự đổi. Xem `Q14` trong [`quyet-dinh.md`](quyet-dinh.md).
+**Chủ dự án chọn phương án B, và đã làm.** Chi tiết luật ở `Q14` trong [`quyet-dinh.md`](quyet-dinh.md). Đo lại trên máy thật sau khi sửa:
 
-Cho tới khi có quyết định, trạng thái đúng là: **người dùng chỉ có bàn phím thì dùng `zalo-cli.exe`** — và hội đồng đã ghi sẵn điều đó ở `ĐM-08`: *"Bản dòng lệnh là đường tiếp cận chính thức cho người khiếm thị, không phải tác dụng phụ tình cờ."*
+| Bộ chạy | |
+|:---|:---|
+| `phep-thu-ma-sat.ps1` — §8.1-1 trọn bộ | **8/8, không đổi.** Đường chuột không mất một chốt nào |
+| `kiem-muc-1.ps1 -Chi BP-01` | **4/4.** `Enter` ba lần → 30/30 tệp · giữ `Space` 5 giây chưa nhả → 30/30 · nhả ra → **0/30** |
+| `BP-04` · `§8.1-3` chạy lại | 3/3 và 5/5 — hai bộ này cũng chạm trang xác nhận |
+
+`ĐM-08` vẫn đứng nguyên như hội đồng ghi: *"Bản dòng lệnh là đường tiếp cận chính thức cho người khiếm thị, không phải tác dụng phụ tình cờ."* Khác là bây giờ nó là **một lựa chọn**, không còn là **lối duy nhất**.
 
 #### Một chuyện chưa truy tới cùng, ghi lại chứ không lấp
 
@@ -491,11 +497,10 @@ Hai lần bộ chạy này báo hỏng, **cả hai đều là lỗi của chính
 
 ### Việc M5 còn lại, nói thẳng
 
-Bảng ở đây từng liệt kê ba việc — JPEG XL, màn sao lưu/khôi phục, `ĐM-08`. **Cả ba đã xong**; xem mục *"Ba việc từng nợ"* ở trên. Còn lại đúng bốn việc, và không việc nào là mã:
+Bảng ở đây từng liệt kê ba việc — JPEG XL, màn sao lưu/khôi phục, `ĐM-08`. **Cả ba đã xong**; xem mục *"Ba việc từng nợ"* ở trên. `BP-01` cũng đã xong sau khi chốt `Q14`. Còn lại đúng ba việc, và không việc nào là mã:
 
 | Việc | Cần gì | Vì sao máy không làm thay được |
 |:---|:---|:---|
-| **`BP-01`** — có mở đường bàn phím tới lệnh xóa không | **một quyết định**, `Q14` | Đo xong: 14/14 chặng trước lệnh xóa đạt, chặng cuối bị `BP-05` chặn. Sửa là đụng vào chỗ nguy hiểm nhất của công cụ, nên không phải việc người viết mã tự quyết |
 | **`§8.1-2` · `MAU-01` · `MAU-09`** | **ba người thử** nhìn bộ ảnh greyscale đã sinh sẵn | Máy đo được ký hiệu, câu chữ, hình sau khi bỏ màu, vị trí và khoảng cách. Nó **không** đo được người ta có *hiểu* không |
 | **`ĐM-08`** với NVDA thật | cài NVDA | Máy này chưa cài. Đã đo trọn đường dò và đường lui bằng cờ `SPI_SETSCREENREADER`, nhưng đó là cờ chứ không phải NVDA |
 | Truy nốt vụ **ứng dụng tự thoát** | thêm số đo | Mẫu 5 lượt quá nhỏ. Xem mục ngay trên |

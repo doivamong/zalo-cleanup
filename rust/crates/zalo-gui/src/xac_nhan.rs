@@ -22,10 +22,12 @@
 //! 3. Nút xóa vô hiệu tới khi chuỗi khớp → [`TrangXacNhan::khop_cum_tu`]
 //! 4. Thứ tự Tab: ô nhập → Hủy → Xóa → [`THU_TU_TAB`]
 //! 5. Khóa mồi 600 ms tính từ **mỗi lần** nút chuyển sang bật → [`KHOA_MOI_MS`]
-//! 6. Bỏ phím tự lặp; chỉ nhận một lần nhấn **trọn vẹn** → [`SuKien::PhimTuLap`]
+//! 6. Bỏ phím tự lặp; chỉ nhận một lần nhấn **trọn vẹn** →
+//!    [`SuKien::PhimTuLap`], [`SuKien::SpaceXuongTrenNut`], [`SuKien::SpaceLen`]
 //! 7. Esc = Hủy, luôn luôn → [`SuKien::Esc`]
-//! 8. Không phím tắt nào trỏ vào nút xóa → không có mã nào sinh ra `BamXoa`
-//!    ngoài [`SuKien::BamNutXoa`]
+//! 8. Không phím tắt nào trỏ vào nút xóa → chỉ hai đường sinh ra lệnh xóa:
+//!    [`SuKien::BamNutXoa`] (chuột) và một lần nhấn `Space` **trọn vẹn** trên
+//!    nút đang có tiêu điểm. Tab tới nút rồi bấm Space **không phải** phím tắt
 //! 9. Chặn dán → [`SuKien::Dan`]
 //! 10. Bấm rồi thì không nhận thêm lần bấm nào → [`Trang::DangXoa`]
 
@@ -66,6 +68,14 @@ pub enum SuKien {
     Dan(String),
     /// Sự kiện phím **tự lặp** do giữ phím, không phải một lần nhấn mới.
     PhimTuLap,
+    /// `Space` nhấn **xuống** trên nút xóa đang có tiêu điểm, và là một lần
+    /// nhấn MỚI — không phải sự kiện tự lặp.
+    ///
+    /// Đây chỉ là **nửa đầu** của một lần nhấn. Nó không kích hoạt gì; điều 6
+    /// đòi một lần nhấn **trọn vẹn**, nên phải chờ [`SuKien::SpaceLen`].
+    SpaceXuongTrenNut,
+    /// `Space` **nhả ra**. Nửa sau của lần nhấn.
+    SpaceLen,
     /// Một lần nhấn **trọn vẹn** lên nút xóa: cả nhấn xuống lẫn nhả ra đều xảy
     /// ra khi trang đang mở.
     BamNutXoa,
@@ -99,6 +109,13 @@ pub struct TrangXacNhan {
     khoa_con_lai: u64,
     /// Lần trước cụm từ đã khớp chưa — để biết lúc nào là **chuyển sang bật**.
     khop_lan_truoc: bool,
+    /// Đã thấy `Space` nhấn **xuống** trên nút xóa, **ngay tại trang này**, và
+    /// lúc ấy mọi chốt đều đã mở.
+    ///
+    /// Đây là chỗ chặn cảnh "phím giữ từ màn trước": phím giữ sẵn không sinh ra
+    /// một lần nhấn mới nào trên trang này, nên cờ này không bao giờ bật, nên
+    /// lúc nhả phím ra chẳng có gì để hoàn tất.
+    space_bat_dau_o_day: bool,
     /// Đã từ chối dán bao nhiêu lần, để giao diện nói được lý do.
     pub so_lan_chan_dan: u32,
 }
@@ -112,6 +129,7 @@ impl TrangXacNhan {
             trang: Trang::DangCho,
             khoa_con_lai: 0,
             khop_lan_truoc: false,
+            space_bat_dau_o_day: false,
             so_lan_chan_dan: 0,
         }
     }
@@ -196,7 +214,43 @@ impl TrangXacNhan {
                 QuyetDinh::TuChoiDan
             }
             // Điều 6: phím tự lặp do giữ phím không phải một lần nhấn mới.
+            //
+            // Tự lặp KHÔNG hủy một lần nhấn đang dở. Người khó vận động bấm
+            // chậm sẽ sinh ra tự lặp trước khi kịp nhả tay, và loại họ ra ở đây
+            // là phạt đúng nhóm người mà `BP-01` sinh ra để bảo vệ. Thứ điều 6
+            // cấm là coi **mỗi sự kiện tự lặp** là một lần kích hoạt — và đây
+            // đúng là chỗ nó bị bỏ đi.
             SuKien::PhimTuLap => QuyetDinh::KhongLam,
+
+            // ---- Đường bàn phím tới lệnh xóa. Xem `quyet-dinh.md` §Q14.
+            //
+            // Điều 1 cấm `Enter` dứt khoát, điều 8 cấm phím tắt. Đường duy nhất
+            // mười điều còn chừa là `Space` trên nút đang có tiêu điểm, nhận
+            // đúng **một lần nhấn trọn vẹn** bắt đầu trên chính trang này.
+            //
+            // Cắt làm hai nửa là cố ý. Một nửa thì không xóa được gì, và cảnh
+            // nguy hiểm nhất — phím giữ từ màn trước — chỉ có nửa sau.
+            SuKien::SpaceXuongTrenNut => {
+                // Ghi nhận CHỈ KHI mọi chốt đã mở ngay lúc nhấn xuống. Không có
+                // vế này thì khóa mồi 600 ms né được bằng cách nhấn xuống sớm
+                // rồi giữ cho tới lúc hết khóa mới nhả.
+                if self.cho_bam_xoa() {
+                    self.space_bat_dau_o_day = true;
+                }
+                QuyetDinh::KhongLam
+            }
+            SuKien::SpaceLen => {
+                let tron_ven = self.space_bat_dau_o_day;
+                self.space_bat_dau_o_day = false;
+                // Xét lại chốt một lần nữa ở lúc nhả: giữa hai nửa có thể đã có
+                // chuyện xảy ra.
+                if tron_ven && self.cho_bam_xoa() {
+                    self.trang = Trang::DangXoa;
+                    QuyetDinh::BatDauXoa
+                } else {
+                    QuyetDinh::KhongLam
+                }
+            }
             SuKien::BamNutXoa => {
                 if self.cho_bam_xoa() {
                     self.trang = Trang::DangXoa;
@@ -251,6 +305,105 @@ mod tests {
         for _ in 0..300 {
             assert_eq!(t.nhan(SuKien::PhimTuLap), QuyetDinh::KhongLam);
         }
+        assert_eq!(t.trang(), Trang::DangCho);
+    }
+
+    // ======================================================================
+    // Đường bàn phím tới lệnh xóa — `quyet-dinh.md` §Q14, phương án B.
+    //
+    // `BP-01` và `BP-05` từng đâm nhau: bàn phím đi trọn được kịch bản rồi tắc
+    // ở đúng nút cuối. Sáu phép thử dưới đây là toàn bộ hợp đồng của đường mới,
+    // và ba trong sáu phép là phép thử **chặn**, không phải phép thử mở.
+    // ======================================================================
+
+    /// Một lần nhấn `Space` **trọn vẹn** trên nút thì xóa được — đây là vế mở,
+    /// và là thứ làm `BP-01` đạt.
+    #[test]
+    fn space_mot_lan_nhan_tron_ven_thi_xoa_duoc() {
+        let mut t = san_sang();
+        assert_eq!(t.nhan(SuKien::SpaceXuongTrenNut), QuyetDinh::KhongLam);
+        assert_eq!(
+            t.trang(),
+            Trang::DangCho,
+            "mới nhấn xuống đã xóa — nửa lần nhấn không được tính"
+        );
+        assert_eq!(t.nhan(SuKien::SpaceLen), QuyetDinh::BatDauXoa);
+        assert_eq!(t.trang(), Trang::DangXoa);
+    }
+
+    /// **Cảnh nguy hiểm nhất của điều 6: phím giữ từ màn trước.**
+    ///
+    /// Người dùng đè `Space` ở màn trước, trang xác nhận mở ra dưới ngón tay,
+    /// rồi họ nhả. Trang này **không hề thấy** lần nhấn xuống nào, nên nửa sau
+    /// không hoàn tất được gì.
+    #[test]
+    fn space_giu_tu_man_truoc_thi_nha_ra_cung_khong_xoa() {
+        let mut t = san_sang();
+        // Chỉ có tự lặp rồi nhả — đúng thứ một phím giữ sẵn sinh ra.
+        for _ in 0..50 {
+            assert_eq!(t.nhan(SuKien::PhimTuLap), QuyetDinh::KhongLam);
+        }
+        assert_eq!(t.nhan(SuKien::SpaceLen), QuyetDinh::KhongLam);
+        assert_eq!(t.trang(), Trang::DangCho, "phím giữ từ màn trước đã xóa");
+    }
+
+    /// **Khóa mồi không né được bằng cách nhấn sớm rồi giữ.**
+    ///
+    /// Nhấn xuống lúc còn khóa, giữ cho tới khi hết khóa mới nhả. Nếu chỉ xét
+    /// chốt ở lúc nhả thì cú này lọt, và khóa mồi 600 ms thành trang trí.
+    #[test]
+    fn nhan_space_trong_khoa_moi_roi_giu_cho_het_khoa_thi_khong_xoa() {
+        let mut t = trang();
+        t.nhan(SuKien::Go("XÓA".into()));
+        assert!(!t.cho_bam_xoa(), "khóa mồi phải đang giữ");
+        assert_eq!(t.nhan(SuKien::SpaceXuongTrenNut), QuyetDinh::KhongLam);
+        t.nhan(SuKien::ThoiGianTroi(KHOA_MOI_MS + 100));
+        assert!(t.cho_bam_xoa(), "khóa mồi phải đã hết");
+        assert_eq!(
+            t.nhan(SuKien::SpaceLen),
+            QuyetDinh::KhongLam,
+            "né được khóa mồi bằng cách nhấn sớm rồi giữ"
+        );
+        assert_eq!(t.trang(), Trang::DangCho);
+    }
+
+    /// Cụm từ hỏng đi **giữa** hai nửa lần nhấn thì không xóa. Người dùng có
+    /// thể xóa bớt một ký tự bằng tay kia trong lúc đang giữ `Space`.
+    #[test]
+    fn cum_tu_hong_giua_hai_nua_lan_nhan_thi_khong_xoa() {
+        let mut t = san_sang();
+        t.nhan(SuKien::SpaceXuongTrenNut);
+        t.nhan(SuKien::Go("XÓ".into()));
+        assert_eq!(t.nhan(SuKien::SpaceLen), QuyetDinh::KhongLam);
+        assert_eq!(t.trang(), Trang::DangCho);
+    }
+
+    /// Nhả `Space` hai lần chỉ xóa một lần. Điều 10 vẫn phải đứng vững trước
+    /// đường mới.
+    #[test]
+    fn nha_space_lan_thu_hai_khong_xoa_them_lan_nua() {
+        let mut t = san_sang();
+        t.nhan(SuKien::SpaceXuongTrenNut);
+        assert_eq!(t.nhan(SuKien::SpaceLen), QuyetDinh::BatDauXoa);
+        for _ in 0..20 {
+            assert_eq!(t.nhan(SuKien::SpaceXuongTrenNut), QuyetDinh::KhongLam);
+            assert_eq!(t.nhan(SuKien::SpaceLen), QuyetDinh::KhongLam);
+        }
+        assert_eq!(t.trang(), Trang::DangXoa);
+    }
+
+    /// Đường mới **không** nới cho `Enter`. Điều 1 cấm dứt khoát, và cấm cả
+    /// khi nút đang có tiêu điểm.
+    #[test]
+    fn duong_space_khong_noi_cho_enter() {
+        let mut t = san_sang();
+        for _ in 0..100 {
+            assert_eq!(t.nhan(SuKien::Enter), QuyetDinh::KhongLam);
+        }
+        assert_eq!(t.trang(), Trang::DangCho);
+        // Và Enter không hoàn tất hộ một lần nhấn Space đang dở.
+        t.nhan(SuKien::SpaceXuongTrenNut);
+        assert_eq!(t.nhan(SuKien::Enter), QuyetDinh::KhongLam);
         assert_eq!(t.trang(), Trang::DangCho);
     }
 

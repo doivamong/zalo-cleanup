@@ -29,7 +29,7 @@
 | 11 | Hai bản dùng chung tệp cấu hình | ✅ chia ba cách |
 | 12 | Nút "Tiếp tục phần còn lại" | ✅ bỏ |
 | 13 | Đóng M6 khi cổng tái lập không đạt | ✅ **phương án A** |
-| **14** | **`BP-01` và `BP-05` đâm nhau: có mở đường bàn phím tới lệnh xóa không** | ❓ **chờ chủ dự án · CHẶN mức 1** |
+| **14** | **`BP-01` và `BP-05` đâm nhau: có mở đường bàn phím tới lệnh xóa không** | ◐ **chọn B** · luật đã viết, chờ kiểm trên màn hình thật |
 
 ---
 
@@ -290,7 +290,7 @@ Ký số vẫn chưa quyết. A chỉ nói "không chặn phát hành vì chuy�
 
 ---
 
-## ❓ Q14 — `BP-01` và `BP-05` đâm nhau · **chờ chủ dự án · CHẶN mức 1**
+## ◐ Q14 — `BP-01` và `BP-05` đâm nhau · **chủ dự án chọn B · chờ kiểm trên màn hình thật**
 
 Đo được, không phải suy ra. `kiem-muc-1.ps1 -Chi BP-01` chạy trọn kịch bản của hội đồng trên giao diện thật, rút chuột ra hoàn toàn:
 
@@ -325,6 +325,35 @@ Tức mười điều cho phép đúng một đường: **`Space` trên nút đa
 | **B** | **Mở `Space`** theo đúng điều 6: nhận một lần nhấn trọn vẹn, bắt đầu trên trang này, không phải tự lặp, sau khóa mồi | `BP-01` đạt mà `BP-05` không bị nới | Sửa **chỗ nguy hiểm nhất của cả công cụ**. Phải chạy lại trọn `§8.1-1` và thêm phép thử cho ca "giữ Space từ màn trước" |
 | **C** | Thêm một cử chỉ riêng, ví dụ giữ `Space` **1,5 giây** trên nút | Ma sát còn mạnh hơn chuột | Không có trong mười điều; là phát minh thêm luật. Và người khó vận động thì giữ phím lâu là rào cản mới |
 
-**Chưa chọn.** Đây là sửa chỗ mà một lỗi hụt sẽ mở lại đúng cái lỗ `§8.1-1` sinh ra để canh, nên nó phải là quyết định của chủ dự án chứ không phải của người viết mã.
+### Chủ dự án chọn **B**
 
-Cho tới lúc đó, trạng thái đúng để ghi vào tài liệu phát hành là: **chỉ có bàn phím thì dùng `zalo-cli.exe`.**
+Luật viết trong `xac_nhan.rs`, là mô-đun **thuần** — không nằm trong mã vẽ, nên phép thử bơm sự kiện vào thẳng được.
+
+Một lần nhấn cắt làm **hai nửa**, và đó là cả điểm của thiết kế:
+
+| Sự kiện | Làm gì |
+|:---|:---|
+| `SpaceXuongTrenNut` | **Chỉ ghi nhận**, không xóa gì. Và chỉ ghi nhận nếu ngay lúc ấy mọi chốt đã mở |
+| `SpaceLen` | Hoàn tất. Xét lại chốt một lần nữa rồi mới xóa |
+
+Bốn chỗ chặn, mỗi chỗ có một phép thử riêng:
+
+1. **Phím giữ từ màn trước** không sinh ra lần nhấn xuống nào *trên trang này*, nên nửa sau chẳng có gì để hoàn tất.
+2. **Khóa mồi 600 ms** xét ở **cả hai** nửa. Không xét ở nửa đầu thì né được bằng cách nhấn xuống sớm rồi giữ cho tới lúc hết khóa mới nhả.
+3. **Cụm từ hỏng đi giữa hai nửa** — gõ `Backspace` bằng tay kia trong lúc đang giữ — thì không xóa.
+4. **`Enter` vẫn cấm dứt khoát**, kể cả khi nút đang có tiêu điểm, và kể cả để hoàn tất hộ một lần nhấn `Space` đang dở.
+
+Một chỗ **cố ý không chặn**: tự lặp **không** hủy lần nhấn đang dở. Người khó vận động bấm chậm sẽ sinh tự lặp trước khi kịp nhả tay, và loại họ ra ở đây là phạt đúng nhóm người mà `BP-01` sinh ra để bảo vệ. Thứ điều 6 cấm là coi **mỗi sự kiện tự lặp** là một lần kích hoạt — và chỗ ấy vẫn bị bỏ đi.
+
+Mã vẽ **không mượn `clicked()` của egui** cho đường này. `clicked()` bắn ở lúc nhấn xuống và không phân biệt được nhấn xuống với nhả ra, mà điều 6 thì đòi đúng một lần nhấn trọn vẹn. Nó đọc thẳng `Event::Key`, vì chỉ sự kiện thô mới nói được `repeat`. Sau chốt `!nuot_bam`, `clicked()` chỉ còn nghĩa **chuột**.
+
+### Chưa xong: phải kiểm lại trên màn hình thật
+
+Đây là sửa **chỗ nguy hiểm nhất của cả công cụ**. Sáu phép thử đơn vị chứng minh **luật** đúng; chúng không chứng minh luật ấy nối đúng vào cửa sổ thật — đúng cái ranh giới mà `§8.1-1` sinh ra để canh, và cũng đúng chỗ egui đã lách một lần rồi.
+
+Chưa gộp vào `main` cho tới khi hai bộ chạy này xanh trên máy thật:
+
+| | |
+|:---|:---|
+| `phep-thu-ma-sat.ps1` | **§8.1-1 trọn bộ.** Giữ Enter, giữ Space, nhấp 200 lần, khóa mồi, và vế kiểm ngược |
+| `kiem-muc-1.ps1 -Chi BP-01` | Ba vế mới: Enter không xóa · giữ Space chưa nhả thì chưa xóa · **nhả ra thì xóa thật** |

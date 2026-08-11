@@ -706,28 +706,67 @@ impl UngDung {
         // trả `true` y như bấm chuột. Tức điều 1 và điều 2 của BP-05 bị lách
         // ngay ở tầng thư viện, không nhìn thấy được từ mã của ta.
         //
-        // Nên khung nào có Enter hoặc Space thì **nuốt sạch** mọi cú bấm của
-        // khung ấy. Người dùng bấm chuột đúng lúc đang gõ Enter thì mất một cú
-        // nhấp — đổi lại, không có đường nào từ bàn phím tới lệnh xóa.
-        let mut nuot_bam = false;
+        // Nên khung nào có phím Enter hoặc Space thì **nuốt sạch** cú bấm mà
+        // THƯ VIỆN sinh ra trong khung ấy. Đường bàn phím hợp lệ đi lối riêng ở
+        // dưới, do mã này dựng lấy — không mượn `clicked()` của egui, vì
+        // `clicked()` không phân biệt được nhấn xuống với nhả ra.
+        //
+        // Đọc từng sự kiện thay vì hỏi `key_pressed`: chỉ có `Event::Key` mới
+        // nói được **`repeat`**, mà phân biệt "nhấn mới" với "tự lặp" chính là
+        // chỗ điều 6 sống hay chết.
+        let mut co_enter = false;
+        let mut space_moi = false;
+        let mut space_lap = false;
+        let mut space_len = false;
         ctx.input(|i| {
-            if i.key_pressed(egui::Key::Enter) {
-                sk.push(SuKien::Enter);
-                nuot_bam = true;
+            for e in &i.events {
+                match e {
+                    egui::Event::Key {
+                        key: egui::Key::Enter,
+                        pressed: true,
+                        ..
+                    } => co_enter = true,
+                    egui::Event::Key {
+                        key: egui::Key::Space,
+                        pressed: true,
+                        repeat,
+                        ..
+                    } => {
+                        if *repeat {
+                            space_lap = true;
+                        } else {
+                            space_moi = true;
+                        }
+                    }
+                    egui::Event::Key {
+                        key: egui::Key::Space,
+                        pressed: false,
+                        ..
+                    } => space_len = true,
+                    egui::Event::Key {
+                        key: egui::Key::Escape,
+                        pressed: true,
+                        ..
+                    } => sk.push(SuKien::Esc),
+                    // Điều 9: chặn dán, cả Ctrl+V lẫn menu chuột phải.
+                    egui::Event::Paste(_) => sk.push(SuKien::Dan(String::new())),
+                    _ => {}
+                }
             }
-            if i.key_down(egui::Key::Space) || i.key_pressed(egui::Key::Space) {
-                // Space giữ lâu sinh ra chuỗi sự kiện tự lặp — điều 6.
-                sk.push(SuKien::PhimTuLap);
-                nuot_bam = true;
-            }
-            if i.key_pressed(egui::Key::Escape) {
-                sk.push(SuKien::Esc);
-            }
-            // Điều 9: chặn dán, cả Ctrl+V lẫn menu chuột phải.
-            if i.events.iter().any(|e| matches!(e, egui::Event::Paste(_))) {
-                sk.push(SuKien::Dan(String::new()));
+            // Phím giữ sẵn từ màn TRƯỚC không sinh ra `Event::Key` nào trên
+            // trang này — chỉ có trạng thái đang-giữ. Vẫn phải đẩy vào máy trạng
+            // thái để nó nuốt cú bấm của thư viện.
+            if i.key_down(egui::Key::Space) && !space_moi {
+                space_lap = true;
             }
         });
+        if co_enter {
+            sk.push(SuKien::Enter);
+        }
+        if space_lap {
+            sk.push(SuKien::PhimTuLap);
+        }
+        let nuot_bam = co_enter || space_moi || space_lap || space_len;
 
         let xn = match &mut self.xn {
             Some(x) => x,
@@ -764,6 +803,7 @@ impl UngDung {
         }
 
         ui.add_space(10.0);
+        let mut nut_co_tieu_diem = false;
         ui.horizontal(|ui| {
             if ui.button("Hủy").clicked() {
                 qd = self.xn.as_mut().unwrap().nhan(SuKien::BamNutHuy);
@@ -773,16 +813,42 @@ impl UngDung {
             let cho = x.cho_bam_xoa();
             let ly_do = x.ly_do_nut_tat();
             let nut = nut_co_the_tat(ui, cho, format!("{}  Xóa vĩnh viễn", bieu_tuong::NGUY_HIEM));
+            nut_co_tieu_diem = nut.has_focus();
             if let Some(l) = ly_do {
                 nut.on_disabled_hover_text(l);
             } else if nut.clicked() && !nuot_bam {
                 // `&& !nuot_bam` là chỗ bịt lỗ Enter/Space của egui. Xem chú
-                // thích ở đầu hàm — bỏ nó đi là mở lại đường từ bàn phím tới
-                // lệnh xóa, và không phép thử nào của máy trạng thái bắt được
-                // vì lỗ nằm ở tầng thư viện chứ không ở tầng luật.
+                // thích ở đầu hàm — bỏ nó đi là bàn phím đi thẳng vào lệnh xóa
+                // qua `clicked()`, không qua luật một-lần-nhấn-trọn-vẹn nào, và
+                // không phép thử nào của máy trạng thái bắt được vì lỗ nằm ở
+                // tầng thư viện chứ không ở tầng luật.
+                //
+                // Sau chốt này thì `clicked()` chỉ còn nghĩa **chuột**.
                 qd = self.xn.as_mut().unwrap().nhan(SuKien::BamNutXoa);
             }
         });
+
+        // ĐƯỜNG BÀN PHÍM TỚI LỆNH XÓA — `quyet-dinh.md` §Q14, phương án B.
+        //
+        // Dựng lấy chứ không mượn `clicked()` của egui, vì `clicked()` bắn ở
+        // lúc **nhấn xuống** và không phân biệt được nhấn xuống với nhả ra —
+        // mà điều 6 thì đòi đúng một lần nhấn **trọn vẹn**.
+        //
+        // Thứ tự hai lời gọi dưới đây là bắt buộc: nửa đầu trước nửa sau. Một
+        // khung vẽ chậm có thể ôm trọn cả hai nửa, và khi ấy nó vẫn phải là một
+        // lần nhấn hợp lệ.
+        if nut_co_tieu_diem && space_moi {
+            let r = self.xn.as_mut().unwrap().nhan(SuKien::SpaceXuongTrenNut);
+            if r != QuyetDinh::KhongLam {
+                qd = r;
+            }
+        }
+        if space_len {
+            let r = self.xn.as_mut().unwrap().nhan(SuKien::SpaceLen);
+            if r != QuyetDinh::KhongLam {
+                qd = r;
+            }
+        }
 
         if let Some(l) = self.xn.as_ref().unwrap().ly_do_nut_tat() {
             ui.add_space(6.0);

@@ -325,6 +325,27 @@ function Toi-Nut($mau, $toi_da = 25) {
 }
 function Bam-Bang-Space { Phim $VK.SPACE; Start-Sleep -Milliseconds 700 }
 
+# Giữ `Space` XUỐNG mà KHÔNG nhả — đúng như bàn phím thật sinh ra khi người ta
+# đè phím. Lần đầu là một lần nhấn mới, từ lần thứ hai Windows đánh dấu tự lặp.
+#
+# Tách "giữ" khỏi "nhả" là cả điểm của phép thử: điều 6 của `BP-05` đòi một lần
+# nhấn TRỌN VẸN, nên trong suốt lúc còn giữ thì không được xóa gì.
+function Giu-Space-Xuong($giay) {
+    Chac-Truoc
+    $het = (Get-Date).AddSeconds($giay)
+    while ((Get-Date) -lt $het) {
+        Gui @((New-Phim $VK.SPACE $false))
+        Start-Sleep -Milliseconds 40
+    }
+    Sau-Khi-Gui
+}
+function Nha-Space {
+    Chac-Truoc
+    Gui @((New-Phim $VK.SPACE $true))
+    Start-Sleep -Milliseconds 200
+    Sau-Khi-Gui
+}
+
 # Tên màn hình đang mở = tiêu đề, tức phần tử Text đầu tiên trong cây — **trừ**
 # dải thông báo đường lui của ĐM-08.
 #
@@ -580,16 +601,37 @@ if (Lam 'BP-01') {
         $nut = Tim $c '*Xóa vĩnh viễn'
         $b['nút xóa bật lên sau khi gõ'] = ($nut -and $nut.Bat)
 
-        $b['bấm được nút xóa bằng bàn phím'] = $false
-        if (Toi-Nut '*Xóa vĩnh viễn' 6) {
-            Phim $VK.SPACE; Start-Sleep -Seconds 3
-            if ((Dem-Tep $sb) -lt $truoc) { $b['bấm được nút xóa bằng bàn phím'] = $true }
-            else {
-                Phim $VK.ENTER; Start-Sleep -Seconds 3
-                if ((Dem-Tep $sb) -lt $truoc) { $b['bấm được nút xóa bằng bàn phím'] = $true }
-            }
+        # ---- Đường bàn phím tới lệnh xóa. `quyet-dinh.md` §Q14, phương án B.
+        #
+        # Ba vế, và HAI trong ba là vế chặn. Một đường mới mở ra ở chỗ nguy hiểm
+        # nhất của công cụ thì phải chứng minh được nó không mở rộng hơn mức đã
+        # định — không phải chỉ chứng minh nó chạy.
+        $b['tới được nút xóa bằng Tab'] = Toi-Nut '*Xóa vĩnh viễn' 6
+        $b['Enter KHÔNG xóa được'] = $true
+        $b['giữ Space chưa nhả thì chưa xóa'] = $false
+        $b['nhả Space ra thì xóa thật'] = $false
+        if ($b['tới được nút xóa bằng Tab']) {
+            Chup 'bp01-trang-xac-nhan'
+
+            # ① Điều 1 cấm Enter DỨT KHOÁT, kể cả khi nút đang có tiêu điểm.
+            Phim $VK.ENTER 3
+            Start-Sleep -Seconds 2
+            $b['Enter KHÔNG xóa được'] = ((Dem-Tep $sb) -eq $truoc)
+            Ghi ("sau khi gõ Enter ba lần: còn {0}/{1} tệp" -f (Dem-Tep $sb), $truoc)
+
+            # ② Giữ Space 5 giây mà CHƯA nhả — điều 6 đòi một lần nhấn trọn vẹn,
+            #    nên suốt lúc còn giữ thì không được xóa gì.
+            Giu-Space-Xuong 5
+            $b['giữ Space chưa nhả thì chưa xóa'] = ((Dem-Tep $sb) -eq $truoc)
+            Ghi ("giữ Space 5 giây, chưa nhả: còn {0}/{1} tệp" -f (Dem-Tep $sb), $truoc)
+
+            # ③ Kiểm NGƯỢC. Nhả ra thì phải xóa được thật — không có vế này thì
+            #    hai vế trên có thể xanh chỉ vì cả đường xóa đã hỏng.
+            Nha-Space
+            Start-Sleep -Seconds 5
+            $b['nhả Space ra thì xóa thật'] = ((Dem-Tep $sb) -lt $truoc)
+            Ghi ("sau khi nhả Space: còn {0}/{1} tệp" -f (Dem-Tep $sb), $truoc)
         }
-        Chup 'bp01-trang-xac-nhan'
 
         foreach ($k in $b.Keys | Sort-Object) {
             Write-Host ("       {0} {1}" -f $(if ($b[$k]) { '✓' } else { '✗' }), $k) `
@@ -603,18 +645,23 @@ if (Lam 'BP-01') {
         Assert 'BP-01a' 'Toàn bộ kịch bản TỚI TRƯỚC lệnh xóa làm được bằng bàn phím' `
             ($hong.Count -eq 0) ("chặng hỏng: " + ($hong -join ', '))
 
-        # Đây là chỗ hai mục mức 1 đâm vào nhau, và mã đã chọn phía nào.
+        # Đường bàn phím tới lệnh xóa — Q14 phương án B. Ba vế, hai vế chặn.
         #
         # Chỉ kết luận khi ĐÃ thật sự đứng trên trang xác nhận với nút đã bật.
-        # Không có vế ấy thì "không bấm được" chỉ nghĩa là chưa đi tới nơi, mà
+        # Không có vế ấy thì "không xóa được" chỉ nghĩa là chưa đi tới nơi, mà
         # báo cáo lại đọc như thể đã chứng minh được điều gì.
-        if ($b['ra trang xác nhận'] -and $b['nút xóa bật lên sau khi gõ']) {
-            Assert 'BP-01b' 'Bấm được LỆNH XÓA bằng bàn phím' $b['bấm được nút xóa bằng bàn phím'] `
-                ('Đã đứng đúng trên trang xác nhận, nút đã BẬT, gõ cả Space lẫn Enter mà ' +
-                 '0 tệp mất. BP-05 điều 1/2/6 nuốt sạch Enter và Space ở đây, nên KHÔNG CÓ ' +
-                 'đường nào từ bàn phím tới lệnh xóa. Hai mục mức 1 đâm nhau — xem kết luận.')
+        if ($b['ra trang xác nhận'] -and $b['nút xóa bật lên sau khi gõ'] -and $b['tới được nút xóa bằng Tab']) {
+            Assert 'BP-01b' 'Điều 1 · Enter KHÔNG kích hoạt, kể cả khi nút đang có tiêu điểm' `
+                $b['Enter KHÔNG xóa được'] 'Enter đã xóa được — điều 1 của BP-05 vỡ'
+            Assert 'BP-01c' 'Điều 6 · giữ Space 5 giây mà chưa nhả thì chưa xóa gì' `
+                $b['giữ Space chưa nhả thì chưa xóa'] `
+                'xóa ngay lúc còn đang giữ — luật một lần nhấn TRỌN VẸN vỡ'
+            Assert 'BP-01d' 'Kiểm ngược · nhả Space ra thì xóa được THẬT' `
+                $b['nhả Space ra thì xóa thật'] `
+                ('không xóa được — hai phép thử trên thành vô nghĩa, vì chúng có thể xanh ' +
+                 'chỉ vì cả đường xóa đã hỏng chứ không phải vì luật chặn đúng')
         } else {
-            Assert 'BP-01b' 'Đi tới được trang xác nhận với nút đã bật, để mà đo' $false `
+            Assert 'BP-01b' 'Đi tới được nút xóa đang bật, để mà đo' $false `
                 'chưa tới nơi, nên chưa kết luận được gì về đường bàn phím tới lệnh xóa'
         }
         Remove-Item $dich -Recurse -Force -EA SilentlyContinue

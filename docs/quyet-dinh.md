@@ -3,7 +3,7 @@
 > Đầu vào: [`docs/ui-ux-council.md`](ui-ux-council.md) mục 9 · [`docs/rust-port-brief.md`](rust-port-brief.md)
 > Ngày: **01/08/2026** · Trạng thái mã nguồn tại thời điểm chốt: `e30e2ee`
 >
-> **Tình trạng: 12/14 đã quyết.** Hai câu còn treo là quyết định chi tiền và phạm vi, không phải quyết định kỹ thuật, và **không chặn thiết kế**.
+> **Tình trạng: 12/15 đã quyết.** Hai câu cũ còn treo là quyết định chi tiền và phạm vi, không chặn thiết kế. Câu thứ mười lăm, `Q15`, thì **có chặn** — nó là một mục tiếp cận mức 1.
 >
 > **Cách đọc:** mục ✅ là đã quyết, có bằng chứng đo được ngay trong tài liệu này.
 > Mục ❓ là còn chờ chủ dự án, và ghi rõ nó đang chặn cái gì.
@@ -30,6 +30,7 @@
 | 12 | Nút "Tiếp tục phần còn lại" | ✅ bỏ |
 | 13 | Đóng M6 khi cổng tái lập không đạt | ✅ **phương án A** |
 | **14** | **`BP-01` và `BP-05` đâm nhau: có mở đường bàn phím tới lệnh xóa không** | ✅ **phương án B**, đã kiểm trên màn hình thật |
+| **15** | **Phép dò của `ĐM-08` bỏ sót Narrator — làm gì** | ❓ **chờ chủ dự án · CHẶN mức 1** |
 
 ---
 
@@ -364,3 +365,45 @@ Mã vẽ **không mượn `clicked()` của egui** cho đường này. `clicked(
 Kèm `BP-04` 3/3 và `§8.1-3` 5/5 chạy lại sau khi đổi — hai bộ ấy cũng chạm vào trang xác nhận.
 
 `BP-01` giờ **đạt**, và `BP-05` không mất gì.
+
+---
+
+## ❓ Q15 — Phép dò của `ĐM-08` bỏ sót Narrator · **chờ chủ dự án · CHẶN mức 1**
+
+`ĐM-08` là mục **mức 1**, và cả phép dò của nó nằm gọn trong một dòng: đọc cờ `SPI_GETSCREENREADER`.
+
+Đem **Narrator**, trình đọc màn hình có sẵn của chính Windows, ra đo:
+
+| | |
+|:---|:---|
+| Narrator chạy liên tục | **20 giây**, không nâng quyền, tiến trình sống suốt |
+| `SPI_GETSCREENREADER` | **False**, từ đầu đến cuối |
+| Dải đường lui trong ứng dụng | **không hiện** |
+
+Nghĩa là **người dùng Narrator không bao giờ thấy đường lui**, mà Narrator lại đúng là thứ người ta dùng khi chưa cài gì thêm.
+
+### Hai tín hiệu thay thế, đo rồi, cả hai đều hỏng
+
+| Tín hiệu | Không có gì chạy | Narrator đang chạy | Dùng được? |
+|:---|:---|:---|:---|
+| `SPI_GETSCREENREADER` | False | **False** | ✗ bỏ sót |
+| `UiaClientsAreListening()` | **True** | True | ✗ luôn True → dải hiện vĩnh viễn |
+| `HKLM\…\Accessibility\Configuration` | không có giá trị | không có giá trị | ✗ Windows không ghi |
+
+> Một chỗ suýt đọc nhầm: khởi động Narrator từ phiên PowerShell **nâng quyền** thì nó sống 6 giây rồi tự thoát. Nếu dừng ở đó thì kết luận "Narrator không bật cờ" đúng vì lý do sai. Phải chạy qua `explorer.exe` cho nó xuống mức toàn vẹn trung bình rồi đo lại — và kết luận vẫn thế, nhưng **bây giờ mới có cơ sở**.
+
+### Còn đúng những gì
+
+Phản ứng của giao diện thì **không hỏng** — đã đo riêng, 7/7: cờ bật thì dải hiện, nói đúng câu, nút bật, dải theo suốt mọi màn hình, bấm thì `zalo-cli.exe` chạy lên thật, và **tắt cờ đi thì dải biến mất**. Hỏng nằm ở chỗ **cái cờ ấy có ai bật không**.
+
+`NVDA` **chưa đo được** — máy này chưa cài. Tài liệu của NVDA nói nó đặt cờ, và phép thử của hội đồng cũng viết là "bật NVDA thật", nhưng đó vẫn là chuyện chưa đo.
+
+### Ba phương án
+
+| | Làm gì | Được | Mất |
+|:-:|:---|:---|:---|
+| **A** | **Giữ nguyên**, ghi rõ giới hạn vào tài liệu phát hành | Không thêm mã, không thêm dương tính giả | `ĐM-08` **không đạt** với Narrator. Một mục mức 1 chỉ chạy đúng cho một phần người dùng |
+| **B** | **Thêm phép dò theo tên tiến trình** cho các trình đã biết (`Narrator`, `nvda`, `jfw`…) | Bịt đúng lỗ đã đo, và `duong_lui.rs` vốn chỉ dùng phép dò để **thêm** một lối đi nên dương tính giả không hại gì | Danh sách tên phải bảo trì; trình mới ra vẫn sót |
+| **C** | **Bỏ hẳn phép dò**: luôn có một lối mở bản dòng lệnh, đặt kín đáo | Không bao giờ sót ai | Trái `RB-07`, chỗ hội đồng đã cân nhắc và chốt là **không** ship nút thường trực — xem `Q7` |
+
+**Chưa chọn.** `B` là thứ tôi nghiêng về nhất: nó bịt đúng lỗ đã đo được, và nguyên tắc tự ghi trong `duong_lui.rs` — *"phép dò này chỉ được dùng để **thêm** một lối đi… dùng nó để đổi hành vi là phạt người dùng vì một phép dò có thể sai"* — nói rằng dương tính giả ở đây không gây hại. Nhưng `C` thì đụng vào một quyết định hội đồng đã chốt, nên vẫn phải hỏi.

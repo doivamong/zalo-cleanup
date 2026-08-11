@@ -155,7 +155,9 @@ Và một lỗi thứ ba, tìm ra khi kịch bản bàn phím của `BP-01` đi 
 
 `BP-01` còn lộ ra chỗ **hai mục mức 1 đâm nhau**: bàn phím đi trọn kịch bản rồi tắc ở đúng nút cuối, vì `BP-05` nuốt cả `Enter` lẫn `Space`. Chốt `Q14` phương án B — mở đúng một đường: `Space` trên nút đang có tiêu điểm, một lần nhấn **trọn vẹn** bắt đầu trên chính trang này. `§8.1-1` chạy lại vẫn **8/8**, và `BP-01` giờ **4/4**: `Enter` ba lần → 30/30 tệp · giữ `Space` 5 giây chưa nhả → 30/30 · nhả ra → **0/30**.
 
-Còn lại đúng ba việc, và không việc nào là mã: ba mục greyscale cần **ba người thử**; `ĐM-08` cần **NVDA thật**; và vụ ứng dụng tự thoát 1/5 lượt khi bị gọi `SetFocus` thì cần thêm số đo.
+**Và một lỗ thứ tư, ở `ĐM-08`.** Đem Narrator — trình đọc màn hình có sẵn của chính Windows — ra đo: chạy liên tục **20 giây, không nâng quyền**, mà `SPI_GETSCREENREADER` vẫn `False` suốt. Cả phép dò của `ĐM-08` nằm gọn trong việc đọc cờ ấy, nên **người dùng Narrator không bao giờ thấy dải đường lui**. Hai tín hiệu thay thế cũng đo rồi và cùng hỏng: `UiaClientsAreListening()` trả `True` kể cả khi không có gì chạy, còn `HKLM\…\Accessibility\Configuration` thì Windows không ghi. Phản ứng của giao diện thì **đúng 7/7** khi cờ bật — hỏng nằm ở chỗ *cái cờ ấy có ai bật không*. Xem `Q15`.
+
+Còn lại đúng ba việc, và không việc nào là mã: `Q15` là **một quyết định**; ba mục greyscale cần **ba người thử**; và vụ ứng dụng tự thoát 1/5 lượt khi bị gọi `SetFocus` thì cần thêm số đo.
 
 [`tools/cong-m5.ps1`](tools/cong-m5.ps1) in thẳng tên phần còn lại sau mỗi lần chạy.
 

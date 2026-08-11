@@ -62,8 +62,10 @@ $canNguoiThat = @(
        ChuY = 'Máy đã đo: ký hiệu ↔ câu chữ khớp một-một, và sau khi bỏ màu mỗi mức vẫn vẽ ra một hình riêng.' }
     @{ Ma = 'MAU-09'; Viec = 'Người thử nhìn ảnh greyscale và chỉ đúng nút Hủy'
        ChuY = 'Máy đã đo: khác chữ, khác biểu tượng, cách nhau 48 dip, Hủy đứng trước.' }
-    @{ Ma = 'ĐM-08';  Viec = 'Bật NVDA THẬT rồi xem dải thông báo có hiện không'
-       ChuY = 'Máy này CHƯA CÀI NVDA. Đường dò, dải thông báo và nút mở bản dòng lệnh đã đo trên giao diện thật với cờ SPI_SETSCREENREADER. Chạy kiem-muc-1.ps1 -KemNarrator để thử bằng Narrator của Windows.' }
+    @{ Ma = 'ĐM-08';  Viec = 'QUYẾT ĐỊNH Q15: phép dò bỏ sót Narrator, làm gì'
+       ChuY = ('ĐÃ ĐO: Narrator chạy 20 giây mà SPI_GETSCREENREADER vẫn False, nên người dùng Narrator ' +
+               'KHÔNG BAO GIỜ thấy dải đường lui. Hai tín hiệu thay thế cũng đã đo và cùng hỏng. Phản ứng ' +
+               'của giao diện thì đúng 7/7 khi cờ bật. NVDA chưa đo được, máy chưa cài. Xem Q15.') }
 )
 
 Write-Host ''

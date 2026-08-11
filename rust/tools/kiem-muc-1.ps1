@@ -1058,41 +1058,78 @@ if (Lam 'DM-08') {
     [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$co, 0)
     Ghi "SPI_GETSCREENREADER lúc bắt đầu: $co"
 
-    # Vế ①: một trình đọc màn hình THẬT có bật cờ ấy không.
-    if ($KemNarrator) {
-        $nar = Join-Path $env:SystemRoot 'System32\Narrator.exe'
-        Start-Process $nar | Out-Null
-        $bat = $false
-        for ($i = 0; $i -lt 30; $i++) {
-            Start-Sleep -Milliseconds 500
-            [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$bat, 0)
-            if ($bat) { break }
-        }
-        Assert 'ĐM-08a' 'Trình đọc màn hình THẬT (Narrator) bật SPI_GETSCREENREADER' $bat `
-            'Narrator chạy mà cờ không lên — phép dò của ta dựa vào một cờ không ai bật'
-        Stop-Process -Name Narrator -Force -EA SilentlyContinue
-        Start-Sleep -Seconds 2
-    } else {
-        ConNguoi 'ĐM-08a' 'Bật NVDA thật (máy này chưa cài) và xem dải thông báo có hiện ra không. Chạy lại với -KemNarrator để thử bằng Narrator của Windows.'
-        Ghi 'Bỏ qua vế Narrator (chạy lại với -KemNarrator để bật). Máy này CHƯA CÀI NVDA.'
-    }
-
-    # Vế ②: giao diện có phản ứng đúng khi cờ ấy bật không. Đặt cờ ở mức phiên,
-    # không ghi vào ini, và trả lại ở `finally`.
+    # Với `-KemNarrator`: bật một trình đọc màn hình THẬT và **để nó chạy suốt**
+    # phần kiểm giao diện.
+    #
+    # Bản đầu bật Narrator, kiểm cái cờ, rồi TẮT Narrator đi mới mở ứng dụng lên
+    # — tức là vẫn đang kiểm cái cờ do chính mình đặt, chứ không kiểm Narrator.
+    # Hai vế ấy tách ra thì vế nào cũng xanh mà chỗ nối giữa chúng không ai canh.
     $sb = Moi-Hop-Cat 6
     $p = $null
     $daDat = $false
+    $narChay = $false
     try {
-        [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 1, [IntPtr]::Zero, 0)
-        $daDat = $true
-        $x = $false
-        [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$x, 0)
-        Assert 'ĐM-08b' 'Đặt được cờ trình đọc màn hình để thử' $x ''
+        if ($KemNarrator) {
+            # Bật Narrator qua `explorer.exe` chứ không `Start-Process` thẳng:
+            # explorer chạy ở mức toàn vẹn trung bình nên tiến trình con KHÔNG
+            # nâng quyền. Khởi động từ một phiên quản trị thì Narrator sống được
+            # 6 giây rồi tự thoát — đã đo, và suýt bị đọc nhầm thành "Narrator
+            # không bật cờ".
+            & explorer.exe (Join-Path $env:SystemRoot 'System32\Narrator.exe')
+            $narChay = $true
+            $bat = $false
+            for ($i = 0; $i -lt 40; $i++) {
+                Start-Sleep -Milliseconds 500
+                [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$bat, 0)
+                if ($bat) { break }
+            }
+            $songSot = @(Get-Process Narrator -EA SilentlyContinue).Count
+            Ghi ("Narrator: {0} tiến trình · SPI_GETSCREENREADER = {1}" -f $songSot, $bat)
+            Assert 'ĐM-08a0' 'Narrator chạy được và sống qua 20 giây, để mà đo' ($songSot -ge 1) `
+                'Narrator tự thoát — khởi động từ phiên quản trị thì đây là lý do'
+
+            # KHÔNG làm nhẹ phép thử này. Nó đỏ vì một lỗ THẬT.
+            Assert 'ĐM-08a' 'Trình đọc màn hình THẬT (Narrator) tự bật SPI_GETSCREENREADER' $bat `
+                ('Narrator chạy 20 giây mà cờ KHÔNG lên. Phép dò của ĐM-08 chỉ đọc cờ này, ' +
+                 'nên người dùng Narrator KHÔNG BAO GIỜ thấy dải đường lui. Đã đo thêm hai ' +
+                 'tín hiệu thay thế, cả hai đều hỏng: UiaClientsAreListening trả True kể cả ' +
+                 'khi không có gì chạy, còn HKLM\...\Accessibility\Configuration thì Windows ' +
+                 'không ghi. Xem Q15 trong docs/quyet-dinh.md.')
+
+            if (-not $bat) {
+                # Cờ không lên thì mọi phép thử dải thông báo ở dưới đo vào hư
+                # không. Đặt cờ bằng tay, và NÓI RÕ là từ đây chỉ còn đo PHẢN
+                # ỨNG của giao diện, không đo phép dò nữa.
+                #
+                # KHÔNG tắt Narrator ở đây. Giết nó rồi mở ứng dụng ngay thì cây
+                # UIA đọc ra rỗng vài giây và bốn phép thử dưới đỏ vì lý do
+                # chẳng liên quan — đã dính đúng bẫy ấy một lượt. Để Narrator
+                # chạy cùng còn gần thực tế hơn: người dùng thật có cả hai.
+                ConNguoi 'ĐM-08' ('Phép dò bỏ sót Narrator — xem Q15. Phần dưới chỉ chứng minh giao ' +
+                    'diện phản ứng ĐÚNG khi cờ bật; nó không chứng minh cờ ấy có bao giờ bật.')
+                Ghi 'Cờ không lên → đặt cờ bằng tay, Narrator vẫn chạy, đo tiếp phản ứng giao diện.'
+                [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 1, [IntPtr]::Zero, 0)
+                $daDat = $true
+            }
+        } else {
+            ConNguoi 'ĐM-08a' 'Bật NVDA thật (máy này chưa cài) và xem dải thông báo có hiện ra không. Chạy lại với -KemNarrator để thử bằng Narrator của Windows.'
+            Ghi 'Bỏ qua vế Narrator (chạy lại với -KemNarrator để bật). Máy này CHƯA CÀI NVDA.'
+            [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 1, [IntPtr]::Zero, 0)
+            $daDat = $true
+            $x = $false
+            [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$x, 0)
+            Assert 'ĐM-08b' 'Đặt được cờ trình đọc màn hình để thử' $x ''
+        }
 
         $p = Mo-App $sb 0 0 $false
         Start-Sleep -Seconds 5              # app dò lại theo nhịp 3 giây
         $c = Cay
         Chup 'dm08-dai-duong-lui'
+        # Đọc được cây trước đã. Không có vế này thì một cây rỗng làm bốn phép
+        # thử dưới đỏ hết, và báo cáo đọc như thể dải thông báo hỏng — trong khi
+        # thứ hỏng là chỗ đọc.
+        Assert 'ĐM-08b0' 'Đọc được cây widget của ứng dụng, để mà đo' (@($c).Count -ge 3) `
+            "chỉ thấy $(@($c).Count) phần tử — ứng dụng chưa lên hoặc UIA đang bận"
         Assert 'ĐM-08c' 'Dải thông báo hiện ra và nói rõ bản dòng lệnh là đường chính thức' `
             (CoChu $c '*đường tiếp cận chính thức*') 'không thấy câu nhắn nào'
         $nut = Tim $c 'Mở bản dòng lệnh'
@@ -1116,10 +1153,28 @@ if (Lam 'DM-08') {
         Assert 'ĐM-08f' 'Bấm nút thì bản dòng lệnh chạy lên thật' ($bam -and $sau_cli -gt $truoc_cli) `
             "gọi được nút: $bam; trước $truoc_cli, sau $sau_cli tiến trình zalo-cli"
         Get-Process zalo-cli -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
+
+        # Vế cuối, và là vế dễ quên nhất: TẮT trình đọc màn hình đi thì dải phải
+        # BIẾN MẤT. Một dải luôn hiện là một dải người ta học cách không đọc, và
+        # phép dò lúc ấy chứng minh được đúng con số không.
+        if ($narChay) { Stop-Process -Name Narrator -Force -EA SilentlyContinue; $narChay = $false }
+        if ($daDat) { [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 0, [IntPtr]::Zero, 0); $daDat = $false }
+        $tat = $true
+        for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$tat, 0)
+            if (-not $tat) { break }
+        }
+        Ghi "sau khi tắt trình đọc màn hình, cờ = $tat"
+        Start-Sleep -Seconds 5          # app dò lại theo nhịp 3 giây
+        Assert 'ĐM-08g' 'Tắt trình đọc màn hình thì dải thông báo BIẾN MẤT' `
+            ((-not $tat) -and -not (CoChu (Cay) '*đường tiếp cận chính thức*')) `
+            'dải vẫn còn — nó không thật sự dò lại, mà chỉ hiện ra một lần rồi ở lì'
     } catch {
         Assert $script:MucDangChay 'chạy trọn phần này, không đứt giữa chừng' $false $_.Exception.Message
     } finally {
         Dong-App $p
+        if ($narChay) { Stop-Process -Name Narrator -Force -EA SilentlyContinue }
         if ($daDat) { [void][K1.W]::SpiSet($SPI_SETSCREENREADER, 0, [IntPtr]::Zero, 0) }
         $z = $true
         [void][K1.W]::SpiGet($SPI_GETSCREENREADER, 0, [ref]$z, 0)

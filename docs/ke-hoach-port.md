@@ -374,7 +374,7 @@ Dính **ba màn**, và chỗ nặng nhất không phải màn sao lưu mà là *
 | **`§8.1-3`** | ✅ 5/5 |
 | **`MAU-01`** | ✅ 4/4 phần máy. Ký hiệu ↔ câu chữ khớp một-một; trên **ảnh đã bỏ màu**, mỗi mức vẽ ra một hình riêng, và hai dòng cùng mức vẽ ra cùng một hình |
 | **`MAU-09`** | ✅ 4/4 phần máy. Khác chữ, khác biểu tượng, cách nhau **48 dip**, `Hủy` đứng trước theo thứ tự đọc |
-| **`ĐM-08`** | ✅ 5/5 phần máy. Dải hiện ra, nói đúng câu, nút bật, **dải vẫn hiện khi đã đi sâu vào giữa luồng**, và bấm thì `zalo-cli.exe` chạy lên thật |
+| **`ĐM-08`** | ◐ **phản ứng đúng 7/7, nhưng phép dò bỏ sót Narrator.** Dải hiện ra, nói đúng câu, nút bật, dải theo suốt mọi màn hình, bấm thì `zalo-cli.exe` chạy lên thật, tắt cờ thì dải biến mất. Nhưng **Narrator chạy 20 giây mà cờ không lên** → `Q15` |
 | **`BP-01`** | ✅ **4/4 sau khi chốt `Q14` phương án B.** Kịch bản đi trọn bằng bàn phím, kể cả lệnh xóa · `Enter` vẫn không kích hoạt · giữ `Space` chưa nhả thì chưa xóa · nhả ra thì xóa thật |
 
 ##### Bốn kiểu gõ của §8.1-3, vì nó là mục dễ tưởng đã kiểm nhất
@@ -502,7 +502,7 @@ Bảng ở đây từng liệt kê ba việc — JPEG XL, màn sao lưu/khôi ph
 | Việc | Cần gì | Vì sao máy không làm thay được |
 |:---|:---|:---|
 | **`§8.1-2` · `MAU-01` · `MAU-09`** | **ba người thử** nhìn bộ ảnh greyscale đã sinh sẵn | Máy đo được ký hiệu, câu chữ, hình sau khi bỏ màu, vị trí và khoảng cách. Nó **không** đo được người ta có *hiểu* không |
-| **`ĐM-08`** với NVDA thật | cài NVDA | Máy này chưa cài. Đã đo trọn đường dò và đường lui bằng cờ `SPI_SETSCREENREADER`, nhưng đó là cờ chứ không phải NVDA |
+| **`ĐM-08`** — phép dò bỏ sót Narrator | **một quyết định**, `Q15` | Đo xong: Narrator chạy 20 giây mà `SPI_GETSCREENREADER` vẫn `False`, và hai tín hiệu thay thế cũng hỏng. Phản ứng của giao diện thì đúng 7/7. Sửa hay không là chuyện đụng tới `RB-07` của hội đồng |
 | Truy nốt vụ **ứng dụng tự thoát** | thêm số đo | Mẫu 5 lượt quá nhỏ. Xem mục ngay trên |
 
 Một chỗ nữa, không phải mục mức 1 nhưng lộ ra trong lúc đo và đáng ghi: **mức rủi ro giữa — `Cần cân nhắc` — không có lối nào tới từ bản đồ họa.** Nó thuộc `CACHE HỆ THỐNG`, mà giao diện chưa mở lối quét ấy. Nghĩa là ba người thử của `MAU-01` chỉ xếp được **hai** mức chứ không phải ba, và câu "33/33" của hội đồng phải đọc lại theo đúng phạm vi ấy.
